@@ -1,10 +1,10 @@
-
 import React, { useMemo } from 'react';
 import type { GameState, CategoryId, ConnectionStatus } from '../types';
 import { questions } from '../data/questions';
 import { Card } from './common/Card';
 import { Button } from './common/Button';
 import { useSpeech } from '../context/SpeechContext';
+import { categoryNames } from '../utils/constants';
 
 interface MainMenuProps {
     gameState: GameState;
@@ -14,16 +14,6 @@ interface MainMenuProps {
     onStartLiveConversation: () => void;
     connectionStatus: ConnectionStatus;
 }
-
-const categoryNames: Record<CategoryId, string> = {
-    numeros: 'Números',
-    suma_resta: 'Suma y Resta',
-    multi_divi: 'Multiplicación y División',
-    problemas: 'Problemas',
-    geometria: 'Geometría',
-    medidas: 'Medidas',
-    reloj: 'El Reloj'
-};
 
 const ConnectionIndicator: React.FC<{ status: ConnectionStatus }> = ({ status }) => {
     const statusInfo = {

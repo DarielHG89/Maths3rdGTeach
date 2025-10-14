@@ -1,4 +1,3 @@
-
 import type { Question, CategoryId } from '../types';
 
 export const questions: Record<CategoryId, Record<number, Question[]>> = {

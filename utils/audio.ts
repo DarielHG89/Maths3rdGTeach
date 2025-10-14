@@ -1,4 +1,3 @@
-
 import type { Blob } from '@google/genai';
 
 // Base64 encoding function

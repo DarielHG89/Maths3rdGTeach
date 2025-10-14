@@ -14,15 +14,14 @@ const MicButton: React.FC<{ status: ConversationStatus, onClick: () => void }> =
     const statusConfig = {
         idle: { icon: '🎤', text: 'Toca para hablar', color: 'bg-blue-500 hover:bg-blue-600', textColor: 'text-white' },
         listening: { icon: '◼', text: 'Escuchando...', color: 'bg-red-500 hover:bg-red-600', textColor: 'text-white' },
-        processing: { icon: '💬', text: 'Pensando...', color: 'bg-gray-400', textColor: 'text-gray-800', disabled: true },
+        processing: { icon: '💬', text: 'Pensando...', color: 'bg-yellow-500 hover:bg-yellow-600', textColor: 'text-white' },
     };
     const current = statusConfig[status];
 
     return (
         <button
             onClick={onClick}
-            disabled={current.disabled}
-            className={`w-32 h-32 rounded-full flex flex-col items-center justify-center transition-all duration-300 shadow-lg transform active:scale-95 disabled:cursor-not-allowed disabled:transform-none ${current.color} ${current.textColor} ${!current.disabled ? 'hover:scale-105' : ''}`}
+            className={`w-32 h-32 rounded-full flex flex-col items-center justify-center transition-all duration-300 shadow-lg transform active:scale-95 ${current.color} ${current.textColor} hover:scale-105`}
         >
             <span className="text-5xl">{current.icon}</span>
             <span className="mt-1 font-bold">{current.text}</span>
@@ -43,13 +42,17 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
     const nextStartTimeRef = useRef<number>(0);
     const audioSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
     const transcriptEndRef = useRef<HTMLDivElement>(null);
+    const turnCompleteReceivedRef = useRef<boolean>(false);
+    const isStoppingRef = useRef<boolean>(false);
     
     const processMessageRef = useRef<(message: LiveServerMessage) => void>();
     
     const stopConversation = useCallback((force = false) => {
         if (!force && status === 'idle') return;
 
+        isStoppingRef.current = true;
         setStatus('idle');
+        
         sessionRef.current?.close();
         sessionRef.current = null;
 
@@ -77,6 +80,8 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
 
     useEffect(() => {
         processMessageRef.current = async (message: LiveServerMessage) => {
+            if (isStoppingRef.current) return;
+
              if (message.serverContent) {
                 if (message.serverContent.inputTranscription) {
                     const { text, isFinal } = message.serverContent.inputTranscription;
@@ -89,6 +94,7 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
                     });
                      if (isFinal) {
                         setStatus('processing');
+                        turnCompleteReceivedRef.current = false;
                     }
                 }
                 if (message.serverContent.outputTranscription) {
@@ -112,7 +118,12 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
                         source.buffer = audioBuffer;
                         source.connect(ctx.destination);
                         source.addEventListener('ended', () => {
+                            if (isStoppingRef.current) return;
                             audioSourcesRef.current.delete(source);
+                            if (audioSourcesRef.current.size === 0 && turnCompleteReceivedRef.current) {
+                                setStatus('listening');
+                                turnCompleteReceivedRef.current = false;
+                            }
                         });
                         source.start(nextStartTime);
                         nextStartTimeRef.current = nextStartTime + audioBuffer.duration;
@@ -121,11 +132,10 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
                 }
     
                 if (message.serverContent?.interrupted) {
-                    audioSourcesRef.current.forEach(source => {
-                        source.stop();
-                        audioSourcesRef.current.delete(source);
-                    });
+                    audioSourcesRef.current.forEach(source => source.stop());
+                    audioSourcesRef.current.clear();
                     nextStartTimeRef.current = 0;
+                    turnCompleteReceivedRef.current = false;
                     setTranscript(prev => {
                         const last = prev[prev.length - 1];
                         if (last?.source === 'model' && !last.isFinal) {
@@ -137,19 +147,27 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
                 }
 
                 if(message.serverContent.turnComplete) {
-                    setStatus('listening');
+                    turnCompleteReceivedRef.current = true;
+                    if (audioSourcesRef.current.size === 0) {
+                        setStatus('listening');
+                        turnCompleteReceivedRef.current = false;
+                    }
                 }
             }
         };
     }, []);
 
     const startConversation = useCallback(async () => {
+        isStoppingRef.current = false;
         setError(null);
         setTranscript([]);
         setStatus('listening');
         try {
             inputAudioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
             outputAudioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+            
+            await outputAudioContextRef.current.resume();
+            await inputAudioContextRef.current.resume();
 
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             mediaStreamRef.current = stream;

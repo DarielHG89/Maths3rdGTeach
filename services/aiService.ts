@@ -1,6 +1,5 @@
-
 import { GoogleGenAI, LiveSession, LiveServerMessage, Modality } from "@google/genai";
-import type { Question, TranscriptEntry } from "../types";
+import type { Question } from "../types";
 
 // Para una futura integración con una IA de Gemini auto-hospedada,
 // se modificaría la inicialización del cliente o se usaría un endpoint de fetch aquí.

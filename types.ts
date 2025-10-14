@@ -1,4 +1,3 @@
-
 export type Screen = 'main-menu' | 'level-selection' | 'quiz' | 'results' | 'live-conversation';
 
 export type CategoryId = 'numeros' | 'suma_resta' | 'multi_divi' | 'problemas' | 'geometria' | 'medidas' | 'reloj';

@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import type { GameState, CategoryId } from '../types';
 import { questions } from '../data/questions';

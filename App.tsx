@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
 import { MainMenu } from './components/MainMenu';
 import { LevelSelection } from './components/LevelSelection';
@@ -6,7 +5,7 @@ import { Quiz } from './components/Quiz';
 import { Results } from './components/Results';
 import { LiveConversation } from './components/LiveConversation';
 import { useGameState } from './hooks/useGameState';
-import type { Screen, QuizConfig, CategoryId, ConnectionStatus } from './types';
+import type { Screen, QuizConfig, CategoryId, ConnectionStatus, Question } from './types';
 import { questions } from './data/questions';
 import { checkGeminiConnection } from './services/aiService';
 import { SpeechProvider } from './context/SpeechContext';
@@ -52,7 +51,7 @@ export default function App() {
     }, []);
 
     const handleStartWeeklyExam = useCallback(() => {
-        let pool: any[] = [];
+        let pool: Question[] = [];
         for (const cat of Object.keys(questions) as CategoryId[]) {
             for (let i = 1; i <= gameState[cat].unlockedLevel; i++) {
                 if(questions[cat][i]) {
@@ -74,7 +73,7 @@ export default function App() {
     }, [gameState]);
 
     const handleStartRefreshExam = useCallback(() => {
-        let pool: any[] = [];
+        let pool: Question[] = [];
         for (const cat of Object.keys(questions) as CategoryId[]) {
             for (let i = 1; i <= gameState[cat].unlockedLevel; i++) {
                 if(questions[cat][i]) {

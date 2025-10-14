@@ -1,8 +1,8 @@
-
 import React from 'react';
 import type { GameState, CategoryId } from '../types';
 import { questions } from '../data/questions';
 import { Card } from './common/Card';
+import { categoryNames } from '../utils/constants';
 
 interface LevelSelectionProps {
     categoryId: CategoryId;
@@ -10,16 +10,6 @@ interface LevelSelectionProps {
     onStartPractice: (categoryId: CategoryId, level: number) => void;
     onBack: () => void;
 }
-
-const categoryNames: Record<CategoryId, string> = {
-    numeros: 'Números',
-    suma_resta: 'Suma y Resta',
-    multi_divi: 'Multiplicación y División',
-    problemas: 'Problemas',
-    geometria: 'Geometría',
-    medidas: 'Medidas',
-    reloj: 'El Reloj'
-};
 
 export const LevelSelection: React.FC<LevelSelectionProps> = ({ categoryId, gameState, onStartPractice, onBack }) => {
     const categoryData = gameState[categoryId];
