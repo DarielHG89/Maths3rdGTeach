@@ -1,0 +1,7 @@
+{
+  "name": "Maestro Digital AI",
+  "description": "An interactive web app that serves as a 'second teacher' for a child, enhanced with AI-powered explanations and hints to foster deep understanding and personalized learning.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
