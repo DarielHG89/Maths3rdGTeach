@@ -30,7 +30,8 @@ const MicButton: React.FC<{ status: ConversationStatus, onClick: () => void }> =
 }
 
 export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) => {
-    const [status, setStatus] = useState<ConversationStatus>('idle');
+    const [statusState, setStatusState] = useState<ConversationStatus>('idle');
+    const statusRef = useRef<ConversationStatus>('idle');
     const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
     const [error, setError] = useState<string | null>(null);
 
@@ -47,8 +48,13 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
     
     const processMessageRef = useRef<(message: LiveServerMessage) => void>();
     
+    const setStatus = (newStatus: ConversationStatus) => {
+        statusRef.current = newStatus;
+        setStatusState(newStatus);
+    };
+
     const stopConversation = useCallback((force = false) => {
-        if (!force && status === 'idle') return;
+        if (!force && statusRef.current === 'idle') return;
 
         isStoppingRef.current = true;
         setStatus('idle');
@@ -75,7 +81,7 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
         audioSourcesRef.current.forEach(source => source.stop());
         audioSourcesRef.current.clear();
         nextStartTimeRef.current = 0;
-    }, [status]);
+    }, []);
 
 
     useEffect(() => {
@@ -204,12 +210,12 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
         } catch (err) {
             console.error(err);
             setError('Necesitas dar permiso para usar el micrófono.');
-            setStatus('idle');
+            stopConversation(true);
         }
     }, [stopConversation]);
 
     const handleMicClick = () => {
-        if (status === 'idle') {
+        if (statusState === 'idle') {
             startConversation();
         } else {
             stopConversation();
@@ -238,7 +244,7 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
             </header>
 
             <div className="flex-grow bg-slate-100 rounded-lg p-4 overflow-y-auto mb-4 shadow-inner">
-                {transcript.length === 0 && status !== 'idle' && (
+                {transcript.length === 0 && statusState !== 'idle' && (
                     <div className="flex justify-center items-center h-full">
                         <p className="text-slate-400 font-semibold">Esperando para escuchar...</p>
                     </div>
@@ -255,7 +261,7 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
 
             <div className="flex-shrink-0 flex flex-col items-center justify-center">
                 {error && <p className="text-red-500 mb-2">{error}</p>}
-                <MicButton status={status} onClick={handleMicClick} />
+                <MicButton status={statusState} onClick={handleMicClick} />
             </div>
         </div>
     );
