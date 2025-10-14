@@ -14,14 +14,15 @@ const MicButton: React.FC<{ status: ConversationStatus, onClick: () => void }> =
     const statusConfig = {
         idle: { icon: '🎤', text: 'Toca para hablar', color: 'bg-blue-500 hover:bg-blue-600', textColor: 'text-white' },
         listening: { icon: '◼', text: 'Escuchando...', color: 'bg-red-500 hover:bg-red-600', textColor: 'text-white' },
-        processing: { icon: '💬', text: 'Pensando...', color: 'bg-gray-400 hover:bg-gray-500', textColor: 'text-gray-800' },
+        processing: { icon: '💬', text: 'Pensando...', color: 'bg-gray-400', textColor: 'text-gray-800', disabled: true },
     };
     const current = statusConfig[status];
 
     return (
         <button
             onClick={onClick}
-            className={`w-32 h-32 rounded-full flex flex-col items-center justify-center transition-colors duration-300 shadow-lg transform hover:scale-105 disabled:cursor-not-allowed disabled:transform-none ${current.color} ${current.textColor}`}
+            disabled={current.disabled}
+            className={`w-32 h-32 rounded-full flex flex-col items-center justify-center transition-all duration-300 shadow-lg transform active:scale-95 disabled:cursor-not-allowed disabled:transform-none ${current.color} ${current.textColor} ${!current.disabled ? 'hover:scale-105' : ''}`}
         >
             <span className="text-5xl">{current.icon}</span>
             <span className="mt-1 font-bold">{current.text}</span>
@@ -77,11 +78,6 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
     useEffect(() => {
         processMessageRef.current = async (message: LiveServerMessage) => {
              if (message.serverContent) {
-                const hasModelOutput = message.serverContent.outputTranscription || message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
-                if (hasModelOutput && status !== 'processing') {
-                    setStatus('processing');
-                }
-
                 if (message.serverContent.inputTranscription) {
                     const { text, isFinal } = message.serverContent.inputTranscription;
                     setTranscript(prev => {
@@ -91,6 +87,9 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
                         }
                         return [...prev, { id: Date.now(), source: 'user', text, isFinal }];
                     });
+                     if (isFinal) {
+                        setStatus('processing');
+                    }
                 }
                 if (message.serverContent.outputTranscription) {
                     const { text, isFinal } = message.serverContent.outputTranscription;
@@ -127,6 +126,14 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
                         audioSourcesRef.current.delete(source);
                     });
                     nextStartTimeRef.current = 0;
+                    setTranscript(prev => {
+                        const last = prev[prev.length - 1];
+                        if (last?.source === 'model' && !last.isFinal) {
+                            return [...prev.slice(0, -1), { ...last, isFinal: true }];
+                        }
+                        return prev;
+                    });
+                    setStatus('listening');
                 }
 
                 if(message.serverContent.turnComplete) {
@@ -134,7 +141,7 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
                 }
             }
         };
-    }, [status]);
+    }, []);
 
     const startConversation = useCallback(async () => {
         setError(null);
@@ -205,7 +212,7 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
     return (
         <div className="animate-fade-in relative flex flex-col h-[70vh] max-h-[70vh]">
             <header className="flex-shrink-0">
-                <button onClick={onBack} className="absolute top-0 left-0 text-slate-500 font-bold hover:text-slate-800 transition-colors">
+                <button onClick={() => { stopConversation(true); onBack(); }} className="absolute top-0 left-0 text-slate-500 font-bold hover:text-slate-800 transition-colors">
                     &larr; Volver al Panel
                 </button>
                 <h2 className="text-4xl font-black text-slate-800 mb-2 mt-8 sm:mt-0">Charla con el Maestro</h2>
@@ -213,8 +220,13 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
             </header>
 
             <div className="flex-grow bg-slate-100 rounded-lg p-4 overflow-y-auto mb-4 shadow-inner">
+                {transcript.length === 0 && status !== 'idle' && (
+                    <div className="flex justify-center items-center h-full">
+                        <p className="text-slate-400 font-semibold">Esperando para escuchar...</p>
+                    </div>
+                )}
                 {transcript.map((entry) => (
-                    <div key={entry.id} className={`flex ${entry.source === 'user' ? 'justify-end' : 'justify-start'} mb-2`}>
+                    <div key={`${entry.id}-${entry.text.length}`} className={`flex ${entry.source === 'user' ? 'justify-end' : 'justify-start'} mb-2`}>
                         <p className={`max-w-[80%] p-3 rounded-lg ${entry.source === 'user' ? 'bg-blue-500 text-white' : 'bg-white text-slate-700 shadow'}`}>
                             {entry.text}
                         </p>
