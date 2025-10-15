@@ -9,6 +9,7 @@ interface LevelSelectionProps {
     gameState: GameState;
     onStartPractice: (categoryId: CategoryId, level: number) => void;
     onBack: () => void;
+    isFreeMode?: boolean;
 }
 
 // Enhanced details for better visual distinction
@@ -18,21 +19,25 @@ const levelDetails: Record<number, { name: string; color: string; bg: string; bo
     3: { name: 'Difícil', color: 'text-purple-800', bg: 'bg-purple-100', border: 'border-purple-500' }
 };
 
-export const LevelSelection: React.FC<LevelSelectionProps> = ({ categoryId, gameState, onStartPractice, onBack }) => {
+export const LevelSelection: React.FC<LevelSelectionProps> = ({ categoryId, gameState, onStartPractice, onBack, isFreeMode = false }) => {
     const categoryData = gameState[categoryId];
     const levels = Object.keys(questions[categoryId]);
 
     return (
         <div className="animate-fade-in relative">
             <button onClick={onBack} className="absolute -top-2 left-0 sm:top-0 sm:left-0 text-slate-500 font-bold hover:text-slate-800 transition-colors">
-                &larr; Volver al Panel
+                &larr; Volver
             </button>
             <h2 className="text-4xl font-black text-slate-800 mb-2 mt-8 sm:mt-0">{categoryNames[categoryId]}</h2>
-            <p className="text-slate-600 mb-6">Selecciona una dificultad. ¡Debes sacar un buen resultado para desbloquear la siguiente!</p>
+            <p className="text-slate-600 mb-6">
+                {isFreeMode
+                    ? 'Elige cualquier nivel para practicar libremente.'
+                    : 'Selecciona una dificultad. ¡Debes sacar un buen resultado para desbloquear la siguiente!'}
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {levels.map(levelStr => {
                     const level = parseInt(levelStr);
-                    const isLocked = level > categoryData.unlockedLevel;
+                    const isLocked = !isFreeMode && level > categoryData.unlockedLevel;
                     const highScore = categoryData.highScores[level] || 0;
                     const totalQuestions = questions[categoryId][level].length;
                     const stars = totalQuestions > 0 ? Math.round((highScore / totalQuestions) * 3) : 0;

@@ -5,6 +5,7 @@ import { Quiz } from './components/Quiz';
 import { Results } from './components/Results';
 import { LiveConversation } from './components/LiveConversation';
 import { NameEntry } from './components/NameEntry';
+import { FreePracticeMenu } from './components/FreePracticeMenu';
 import { useGameState } from './hooks/useGameState';
 import type { Screen, QuizConfig, CategoryId, ConnectionStatus, Question } from './types';
 import { questions } from './data/questions';
@@ -29,6 +30,7 @@ export default function App() {
     const [finalScore, setFinalScore] = useState<{ score: number; total: number } | null>(null);
     const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('checking');
     const [studentName, setStudentName] = useState<string | null>(null);
+    const [isFreeMode, setIsFreeMode] = useState(false);
 
     const { gameState, updateHighScore, unlockNextLevel } = useGameState();
 
@@ -54,6 +56,13 @@ export default function App() {
 
     const handleSelectCategory = useCallback((categoryId: CategoryId) => {
         setSelectedCategory(categoryId);
+        setIsFreeMode(false);
+        setScreen('level-selection');
+    }, []);
+
+    const handleSelectCategoryForFreePractice = useCallback((categoryId: CategoryId) => {
+        setSelectedCategory(categoryId);
+        setIsFreeMode(true);
         setScreen('level-selection');
     }, []);
     
@@ -114,19 +123,20 @@ export default function App() {
 
 
     const handleQuizEnd = useCallback((score: number, total: number) => {
-        if (quizConfig?.type === 'practice' && quizConfig.categoryId && quizConfig.level) {
+        if (quizConfig?.type === 'practice' && quizConfig.categoryId && quizConfig.level && !isFreeMode) {
             const { categoryId, level } = quizConfig;
             updateHighScore(categoryId, level, score);
             unlockNextLevel(categoryId, level, score, total);
         }
         setFinalScore({ score, total });
         setScreen('results');
-    }, [quizConfig, updateHighScore, unlockNextLevel]);
+    }, [quizConfig, updateHighScore, unlockNextLevel, isFreeMode]);
 
     const handleBackToMenu = useCallback(() => {
         setQuizConfig(null);
         setSelectedCategory(null);
         setFinalScore(null);
+        setIsFreeMode(false);
         setScreen('main-menu');
     }, []);
 
@@ -136,6 +146,14 @@ export default function App() {
 
     const handleStartLiveConversation = useCallback(() => {
         setScreen('live-conversation');
+    }, []);
+    
+    const handleStartFreePractice = useCallback(() => {
+        setScreen('free-practice-menu');
+    }, []);
+
+    const handleBackToFreePracticeMenu = useCallback(() => {
+        setScreen('free-practice-menu');
     }, []);
 
     const renderScreen = () => {
@@ -151,9 +169,12 @@ export default function App() {
                         onStartWeeklyExam={handleStartWeeklyExam}
                         onStartRefreshExam={handleStartRefreshExam}
                         onStartLiveConversation={handleStartLiveConversation}
+                        onStartFreePractice={handleStartFreePractice}
                         connectionStatus={connectionStatus}
                     />
                 );
+            case 'free-practice-menu':
+                return <FreePracticeMenu onSelectCategory={handleSelectCategoryForFreePractice} onBack={handleBackToMenu} />;
             case 'level-selection':
                 if (!selectedCategory) return null;
                 return (
@@ -161,7 +182,8 @@ export default function App() {
                         categoryId={selectedCategory}
                         gameState={gameState}
                         onStartPractice={handleStartPractice}
-                        onBack={handleBackToMenu}
+                        onBack={isFreeMode ? handleBackToFreePracticeMenu : handleBackToMenu}
+                        isFreeMode={isFreeMode}
                     />
                 );
             case 'quiz':
@@ -179,7 +201,7 @@ export default function App() {
             case 'live-conversation':
                  return <LiveConversation onBack={handleBackToMenu} />;
             default:
-                return <MainMenu studentName={studentName} gameState={gameState} onSelectCategory={handleSelectCategory} onStartWeeklyExam={handleStartWeeklyExam} onStartRefreshExam={handleStartRefreshExam} onStartLiveConversation={handleStartLiveConversation} connectionStatus={connectionStatus} />;
+                return <MainMenu studentName={studentName} gameState={gameState} onSelectCategory={handleSelectCategory} onStartWeeklyExam={handleStartWeeklyExam} onStartRefreshExam={handleStartRefreshExam} onStartLiveConversation={handleStartLiveConversation} onStartFreePractice={handleStartFreePractice} connectionStatus={connectionStatus} />;
         }
     };
     

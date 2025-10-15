@@ -1,3 +1,5 @@
+
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 // Fix: Removed LiveSession as it's no longer exported.
 import type { LiveServerMessage } from '@google/genai';
@@ -5,6 +7,7 @@ import { connectToLive } from '../services/aiService';
 import { createBlob, decode, decodeAudioData } from '../utils/audio';
 import type { TranscriptEntry } from '../types';
 import { useSpeech } from '../context/SpeechContext';
+import { Card } from './common/Card';
 
 interface LiveConversationProps {
     onBack: () => void;
@@ -38,6 +41,10 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
     const [error, setError] = useState<string | null>(null);
     const { speak } = useSpeech();
 
+    const [pastTranscripts, setPastTranscripts] = useState<{timestamp: number, transcript: TranscriptEntry[]}[]>([]);
+    const [viewingPast, setViewingPast] = useState(false);
+    const [selectedTranscript, setSelectedTranscript] = useState<TranscriptEntry[] | null>(null);
+
     // Fix: Using `any` for sessionRef as LiveSession type is no longer exported.
     const sessionRef = useRef<any | null>(null);
     const inputAudioContextRef = useRef<AudioContext | null>(null);
@@ -56,6 +63,18 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
     useEffect(() => {
         transcriptRef.current = transcript;
     }, [transcript]);
+
+     useEffect(() => {
+        try {
+            const TRANSCRIPTS_KEY = 'maestroDigitalTranscripts';
+            const saved = localStorage.getItem(TRANSCRIPTS_KEY);
+            if (saved) {
+                setPastTranscripts(JSON.parse(saved));
+            }
+        } catch (e) {
+            console.error("Could not load past transcripts", e);
+        }
+    }, []);
 
     const setStatus = (newStatus: ConversationStatus) => {
         statusRef.current = newStatus;
@@ -83,6 +102,7 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
                 if (newTranscriptRecord.transcript.length > 0) {
                     const updatedTranscripts = [newTranscriptRecord, ...savedTranscripts].slice(0, MAX_TRANSCRIPTS);
                     localStorage.setItem(TRANSCRIPTS_KEY, JSON.stringify(updatedTranscripts));
+                    setPastTranscripts(updatedTranscripts); // Update state after saving
                     console.log('Conversation transcript saved.');
                 }
             } catch (err) {
@@ -92,8 +112,8 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
         
         setStatus('idle');
         
-        // FIX: The session.close() method expects one argument. Passing 'undefined' to satisfy this requirement.
-        sessionRef.current?.close(undefined);
+        // Fix: The session.close() method was called without arguments, but it expects one. Passing an empty object to resolve the error.
+        sessionRef.current?.close({});
         sessionRef.current = null;
 
         mediaStreamRef.current?.getTracks().forEach(track => track.stop());
@@ -281,17 +301,79 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
 
     useEffect(() => {
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [transcript]);
+    }, [transcript, selectedTranscript]);
+
+
+    if (viewingPast) {
+        return (
+            <div className="animate-fade-in relative flex flex-col h-[70vh] max-h-[70vh]">
+                {selectedTranscript ? (
+                    // Viewing a single past transcript
+                    <>
+                        <header className="flex-shrink-0">
+                             <button onClick={() => setSelectedTranscript(null)} className="absolute top-0 left-0 text-slate-500 font-bold hover:text-slate-800 transition-colors">
+                                &larr; Volver al Historial
+                            </button>
+                            <h2 className="text-3xl font-black text-slate-800 text-center mb-4 mt-8 sm:mt-0">Transcripción</h2>
+                        </header>
+                         <div className="flex-grow bg-slate-100 rounded-lg p-4 overflow-y-auto shadow-inner">
+                            {selectedTranscript.map((entry, index) => (
+                                <div key={`${entry.id}-${index}`} className={`flex ${entry.source === 'user' ? 'justify-end' : 'justify-start'} mb-2`}>
+                                    <p className={`max-w-[80%] p-3 rounded-lg ${entry.source === 'user' ? 'bg-blue-500 text-white' : 'bg-white text-slate-700 shadow'}`}>
+                                        {entry.text}
+                                    </p>
+                                </div>
+                            ))}
+                            <div ref={transcriptEndRef} />
+                        </div>
+                    </>
+                ) : (
+                    // Viewing the list of past transcripts
+                    <>
+                        <header className="flex-shrink-0">
+                            <button onClick={() => setViewingPast(false)} className="absolute top-0 left-0 text-slate-500 font-bold hover:text-slate-800 transition-colors">
+                                &larr; Volver a la Charla
+                            </button>
+                            <h2 className="text-4xl font-black text-slate-800 mb-2 mt-8 sm:mt-0">Conversaciones Pasadas</h2>
+                             <p className="text-slate-500 mb-4">Revisa tus charlas anteriores con el Maestro.</p>
+                        </header>
+                         <div className="flex-grow overflow-y-auto space-y-3 p-1">
+                            {pastTranscripts.length === 0 ? (
+                                <p className="text-slate-500 text-center mt-8">No hay conversaciones guardadas todavía.</p>
+                            ) : (
+                                pastTranscripts.map((record) => (
+                                    <Card key={record.timestamp} onClick={() => setSelectedTranscript(record.transcript)}>
+                                        <h3 className="font-bold text-slate-700">Conversación de:</h3>
+                                        <p className="text-sm text-slate-500">{new Date(record.timestamp).toLocaleString('es-ES')}</p>
+                                    </Card>
+                                ))
+                            )}
+                        </div>
+                    </>
+                )}
+            </div>
+        );
+    }
 
 
     return (
         <div className="animate-fade-in relative flex flex-col h-[70vh] max-h-[70vh]">
-            <header className="flex-shrink-0">
-                <button onClick={() => { stopConversation(true); onBack(); }} className="absolute top-0 left-0 text-slate-500 font-bold hover:text-slate-800 transition-colors">
-                    &larr; Volver al Panel
-                </button>
-                <h2 className="text-4xl font-black text-slate-800 mb-2 mt-8 sm:mt-0">Charla con el Maestro</h2>
-                <p className="text-slate-500 mb-4">¡Habla con el Maestro Digital sobre lo que quieras aprender!</p>
+            <header className="flex-shrink-0 flex justify-between items-start">
+                 <div>
+                    <button onClick={() => { stopConversation(true); onBack(); }} className="absolute top-0 left-0 text-slate-500 font-bold hover:text-slate-800 transition-colors">
+                        &larr; Volver al Panel
+                    </button>
+                    <h2 className="text-4xl font-black text-slate-800 mb-2 mt-8 sm:mt-0">Charla con el Maestro</h2>
+                    <p className="text-slate-500 mb-4">¡Habla con el Maestro Digital sobre lo que quieras aprender!</p>
+                 </div>
+                 {pastTranscripts.length > 0 && (
+                     <button 
+                        onClick={() => setViewingPast(true)}
+                        className="bg-purple-100 text-purple-700 font-bold py-2 px-3 rounded-lg hover:bg-purple-200 transition-colors text-sm whitespace-nowrap"
+                    >
+                        Ver Historial 📜
+                    </button>
+                 )}
             </header>
 
             <div className="flex-grow bg-slate-100 rounded-lg p-4 overflow-y-auto mb-4 shadow-inner">

@@ -13,6 +13,7 @@ interface MainMenuProps {
     onStartWeeklyExam: () => void;
     onStartRefreshExam: () => void;
     onStartLiveConversation: () => void;
+    onStartFreePractice: () => void;
     connectionStatus: ConnectionStatus;
 }
 
@@ -60,7 +61,7 @@ const categoryIcons: Record<CategoryId, string> = {
     reloj: '⏰'
 };
 
-export const MainMenu: React.FC<MainMenuProps> = ({ studentName, gameState, onSelectCategory, onStartWeeklyExam, onStartRefreshExam, onStartLiveConversation, connectionStatus }) => {
+export const MainMenu: React.FC<MainMenuProps> = ({ studentName, gameState, onSelectCategory, onStartWeeklyExam, onStartRefreshExam, onStartLiveConversation, onStartFreePractice, connectionStatus }) => {
     
     const { masteryLevels, recommendation } = useMemo(() => {
         const levels = (Object.keys(questions) as CategoryId[]).map(categoryId => {
@@ -130,10 +131,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({ studentName, gameState, onSe
             
             <hr className="my-6 border-slate-300" />
 
-            <h2 className="text-3xl font-black text-slate-800 mb-4">Modos de Examen</h2>
+            <h2 className="text-3xl font-black text-slate-800 mb-4">Modos de Examen y Práctica Libre</h2>
             <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
                 <Button variant="secondary" onClick={onStartWeeklyExam} className="w-full sm:w-auto">🏆 Examen Semanal</Button>
                 <Button variant="primary" onClick={onStartRefreshExam} className="w-full sm:w-auto">💡 Refrescar Memoria</Button>
+                <Button variant="primary" onClick={onStartFreePractice} className="w-full sm:w-auto">🤸 Práctica Libre</Button>
             </div>
         </div>
     );
