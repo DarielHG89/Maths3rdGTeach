@@ -1,4 +1,4 @@
-export type Screen = 'main-menu' | 'level-selection' | 'quiz' | 'results' | 'live-conversation';
+export type Screen = 'main-menu' | 'level-selection' | 'quiz' | 'results' | 'live-conversation' | 'name-entry';
 
 export type CategoryId = 'numeros' | 'suma_resta' | 'multi_divi' | 'problemas' | 'geometria' | 'medidas' | 'reloj';
 

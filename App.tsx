@@ -4,6 +4,7 @@ import { LevelSelection } from './components/LevelSelection';
 import { Quiz } from './components/Quiz';
 import { Results } from './components/Results';
 import { LiveConversation } from './components/LiveConversation';
+import { NameEntry } from './components/NameEntry';
 import { useGameState } from './hooks/useGameState';
 import type { Screen, QuizConfig, CategoryId, ConnectionStatus, Question } from './types';
 import { questions } from './data/questions';
@@ -19,20 +20,37 @@ function shuffleArray<T,>(array: T[]): T[] {
     return newArray;
 }
 
+const STUDENT_NAME_KEY = 'maestroDigitalStudentName';
+
 export default function App() {
     const [screen, setScreen] = useState<Screen>('main-menu');
     const [quizConfig, setQuizConfig] = useState<QuizConfig | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<CategoryId | null>(null);
     const [finalScore, setFinalScore] = useState<{ score: number; total: number } | null>(null);
     const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('checking');
+    const [studentName, setStudentName] = useState<string | null>(null);
 
     const { gameState, updateHighScore, unlockNextLevel } = useGameState();
 
     useEffect(() => {
+        const savedName = localStorage.getItem(STUDENT_NAME_KEY);
+        if (savedName) {
+            setStudentName(savedName);
+            setScreen('main-menu');
+        } else {
+            setScreen('name-entry');
+        }
+
         checkGeminiConnection().then(isOnline => {
             setConnectionStatus(isOnline ? 'online' : 'offline');
         });
     }, []);
+
+    const handleNameSubmit = (name: string) => {
+        localStorage.setItem(STUDENT_NAME_KEY, name);
+        setStudentName(name);
+        setScreen('main-menu');
+    };
 
     const handleSelectCategory = useCallback((categoryId: CategoryId) => {
         setSelectedCategory(categoryId);
@@ -112,15 +130,22 @@ export default function App() {
         setScreen('main-menu');
     }, []);
 
+    const handleBackToLevelSelection = useCallback(() => {
+        setScreen('level-selection');
+    }, []);
+
     const handleStartLiveConversation = useCallback(() => {
         setScreen('live-conversation');
     }, []);
 
     const renderScreen = () => {
         switch (screen) {
+            case 'name-entry':
+                return <NameEntry onNameSubmit={handleNameSubmit} />;
             case 'main-menu':
                 return (
                     <MainMenu
+                        studentName={studentName}
                         gameState={gameState}
                         onSelectCategory={handleSelectCategory}
                         onStartWeeklyExam={handleStartWeeklyExam}
@@ -141,7 +166,7 @@ export default function App() {
                 );
             case 'quiz':
                 if (!quizConfig) return null;
-                return <Quiz quizConfig={quizConfig} onQuizEnd={handleQuizEnd} />;
+                return <Quiz quizConfig={quizConfig} onQuizEnd={handleQuizEnd} onBack={quizConfig.type === 'practice' ? handleBackToLevelSelection : handleBackToMenu} />;
             case 'results':
                 if (!finalScore) return null;
                 return (
@@ -154,14 +179,14 @@ export default function App() {
             case 'live-conversation':
                  return <LiveConversation onBack={handleBackToMenu} />;
             default:
-                return <MainMenu gameState={gameState} onSelectCategory={handleSelectCategory} onStartWeeklyExam={handleStartWeeklyExam} onStartRefreshExam={handleStartRefreshExam} onStartLiveConversation={handleStartLiveConversation} connectionStatus={connectionStatus} />;
+                return <MainMenu studentName={studentName} gameState={gameState} onSelectCategory={handleSelectCategory} onStartWeeklyExam={handleStartWeeklyExam} onStartRefreshExam={handleStartRefreshExam} onStartLiveConversation={handleStartLiveConversation} connectionStatus={connectionStatus} />;
         }
     };
     
     return (
         <SpeechProvider>
             <div className="flex justify-center items-center min-h-screen p-4">
-                <div className="bg-white p-4 sm:p-8 rounded-2xl shadow-2xl w-full max-w-4xl text-center text-slate-700">
+                <div className="bg-white/90 backdrop-blur-sm p-4 sm:p-8 rounded-2xl shadow-2xl w-full max-w-4xl text-center text-slate-700 border border-white/20">
                     {renderScreen()}
                 </div>
             </div>

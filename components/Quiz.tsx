@@ -7,9 +7,10 @@ import { useSpeech } from '../context/SpeechContext';
 interface QuizProps {
     quizConfig: QuizConfig;
     onQuizEnd: (score: number, total: number) => void;
+    onBack: () => void;
 }
 
-export const Quiz: React.FC<QuizProps> = ({ quizConfig, onQuizEnd }) => {
+export const Quiz: React.FC<QuizProps> = ({ quizConfig, onQuizEnd, onBack }) => {
     const [questionIndex, setQuestionIndex] = useState(0);
     const [score, setScore] = useState(0);
     const [userAnswer, setUserAnswer] = useState('');
@@ -72,13 +73,22 @@ export const Quiz: React.FC<QuizProps> = ({ quizConfig, onQuizEnd }) => {
             onQuizEnd(score, quizConfig.questions.length);
         }
     };
+    
+    const handleExit = () => {
+        if (window.confirm('¿Estás seguro de que quieres salir? Tu progreso en este cuestionario se perderá.')) {
+            onBack();
+        }
+    };
 
     const progressPercent = ((questionIndex) / quizConfig.questions.length) * 100;
 
     return (
         <div className="animate-fade-in">
             <header className="flex justify-between items-center mb-4">
-                <h2 className="text-lg sm:text-2xl font-bold text-slate-800 text-left">{quizConfig.name}</h2>
+                 <button onClick={handleExit} className="text-slate-500 font-bold hover:text-slate-800 transition-colors text-sm sm:text-base">
+                    &larr; Salir
+                </button>
+                <h2 className="text-sm sm:text-2xl font-bold text-slate-800 text-left">{quizConfig.name}</h2>
                 <div className="text-lg font-bold bg-yellow-400 text-white px-4 py-2 rounded-full shadow-md">Puntuación: {score}</div>
             </header>
             

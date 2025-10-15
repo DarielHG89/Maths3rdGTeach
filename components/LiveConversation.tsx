@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import type { LiveSession, LiveServerMessage } from '@google/genai';
+// Fix: Removed LiveSession as it's no longer exported.
+import type { LiveServerMessage } from '@google/genai';
 import { connectToLive } from '../services/aiService';
 import { createBlob, decode, decodeAudioData } from '../utils/audio';
 import type { TranscriptEntry } from '../types';
@@ -35,7 +36,8 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
     const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
     const [error, setError] = useState<string | null>(null);
 
-    const sessionRef = useRef<LiveSession | null>(null);
+    // Fix: Using `any` for sessionRef as LiveSession type is no longer exported.
+    const sessionRef = useRef<any | null>(null);
     const inputAudioContextRef = useRef<AudioContext | null>(null);
     const outputAudioContextRef = useRef<AudioContext | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -54,11 +56,13 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
     };
 
     const stopConversation = useCallback((force = false) => {
-        if (!force && statusRef.current === 'idle') return;
+        if ((!force && statusRef.current === 'idle') || isStoppingRef.current) return;
 
         isStoppingRef.current = true;
         setStatus('idle');
         
+        // Fix: According to guidelines, close() takes no arguments.
+        // The previous FIX comment and implementation might have been based on an older/incorrect SDK version.
         sessionRef.current?.close();
         sessionRef.current = null;
 
@@ -85,32 +89,33 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
 
 
     useEffect(() => {
+        // Fix: Refactored message processing to handle API changes (no more `isFinal` property).
         processMessageRef.current = async (message: LiveServerMessage) => {
             if (isStoppingRef.current) return;
 
              if (message.serverContent) {
                 if (message.serverContent.inputTranscription) {
-                    const { text, isFinal } = message.serverContent.inputTranscription;
+                    const text = message.serverContent.inputTranscription.text;
                     setTranscript(prev => {
                         const last = prev[prev.length - 1];
                         if (last?.source === 'user' && !last.isFinal) {
-                            return [...prev.slice(0, -1), { ...last, text, isFinal }];
+                            return [...prev.slice(0, -1), { ...last, text, isFinal: false }];
                         }
-                        return [...prev, { id: Date.now(), source: 'user', text, isFinal }];
+                        return [...prev, { id: Date.now(), source: 'user', text, isFinal: false }];
                     });
-                     if (isFinal) {
-                        setStatus('processing');
-                        turnCompleteReceivedRef.current = false;
-                    }
                 }
                 if (message.serverContent.outputTranscription) {
-                    const { text, isFinal } = message.serverContent.outputTranscription;
+                    // Set status to processing when model starts responding
+                    if (statusRef.current === 'listening') {
+                        setStatus('processing');
+                    }
+                    const text = message.serverContent.outputTranscription.text;
                     setTranscript(prev => {
                         const last = prev[prev.length - 1];
                         if (last?.source === 'model' && !last.isFinal) {
-                            return [...prev.slice(0, -1), { ...last, text: last.text + text, isFinal }];
+                            return [...prev.slice(0, -1), { ...last, text: last.text + text, isFinal: false }];
                         }
-                        return [...prev, { id: Date.now(), source: 'model', text, isFinal }];
+                        return [...prev, { id: Date.now(), source: 'model', text, isFinal: false }];
                     });
                 }
                 const audioData = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
@@ -154,6 +159,8 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
 
                 if(message.serverContent.turnComplete) {
                     turnCompleteReceivedRef.current = true;
+                    // Mark the last transcript entries as final.
+                    setTranscript(prev => prev.map((entry, index) => index === prev.length - 1 ? { ...entry, isFinal: true } : entry));
                     if (audioSourcesRef.current.size === 0) {
                         setStatus('listening');
                         turnCompleteReceivedRef.current = false;
@@ -169,8 +176,9 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
         setTranscript([]);
         setStatus('listening');
         try {
-            inputAudioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-            outputAudioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+            // FIX: Cast window to `any` to allow access to the non-standard `webkitAudioContext` for broader browser compatibility, resolving TypeScript errors.
+            inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+            outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
             
             await outputAudioContextRef.current.resume();
             await inputAudioContextRef.current.resume();
@@ -183,8 +191,19 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
             
             const sessionPromise = connectToLive(
                 (message) => processMessageRef.current?.(message),
-                (e) => { console.error(e); setError('Hubo un error en la conexión.'); stopConversation(true); },
-                () => { console.log('closed'); stopConversation(true); }
+                (e) => { 
+                    console.error('Live connection error:', e); 
+                    setError('Hubo un error en la conexión.'); 
+                    stopConversation(true); 
+                },
+                () => {
+                    console.log('Live connection closed.');
+                    // This catches unexpected closes from the server.
+                    // User-initiated closes are handled by the stopConversation function itself.
+                    if (!isStoppingRef.current) {
+                        stopConversation(true);
+                    }
+                }
             );
 
             sessionPromise.then(session => {
@@ -208,7 +227,7 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
             scriptProcessorRef.current = scriptProcessor;
 
         } catch (err) {
-            console.error(err);
+            console.error('Error starting conversation:', err);
             setError('Necesitas dar permiso para usar el micrófono.');
             stopConversation(true);
         }

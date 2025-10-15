@@ -1,4 +1,4 @@
-import { GoogleGenAI, LiveSession, LiveServerMessage, Modality } from "@google/genai";
+import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
 import type { Question } from "../types";
 
 // Para una futura integración con una IA de Gemini auto-hospedada,
@@ -78,7 +78,7 @@ export function connectToLive(
     onMessage: (message: LiveServerMessage) => void,
     onError: (error: ErrorEvent) => void,
     onClose: (close: CloseEvent) => void
-): Promise<LiveSession> {
+) {
      if (!isApiAvailable) {
         return Promise.reject(new Error("Gemini API is not available."));
     }

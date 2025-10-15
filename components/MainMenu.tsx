@@ -7,6 +7,7 @@ import { useSpeech } from '../context/SpeechContext';
 import { categoryNames } from '../utils/constants';
 
 interface MainMenuProps {
+    studentName: string | null;
     gameState: GameState;
     onSelectCategory: (categoryId: CategoryId) => void;
     onStartWeeklyExam: () => void;
@@ -49,7 +50,17 @@ const VoiceToggleButton = () => {
     )
 }
 
-export const MainMenu: React.FC<MainMenuProps> = ({ gameState, onSelectCategory, onStartWeeklyExam, onStartRefreshExam, onStartLiveConversation, connectionStatus }) => {
+const categoryIcons: Record<CategoryId, string> = {
+    numeros: '🔢',
+    suma_resta: '➕',
+    multi_divi: '✖️',
+    problemas: '🧠',
+    geometria: '📐',
+    medidas: '📏',
+    reloj: '⏰'
+};
+
+export const MainMenu: React.FC<MainMenuProps> = ({ studentName, gameState, onSelectCategory, onStartWeeklyExam, onStartRefreshExam, onStartLiveConversation, connectionStatus }) => {
     
     const { masteryLevels, recommendation } = useMemo(() => {
         const levels = (Object.keys(questions) as CategoryId[]).map(categoryId => {
@@ -73,11 +84,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({ gameState, onSelectCategory,
         const nextChallenge = sortedLevels.find(cat => cat.mastery < 100);
         
         const rec = nextChallenge
-            ? `¡Hola! Tu próximo desafío podría ser el área de ${categoryNames[nextChallenge.id]}.`
-            : "¡Felicidades! ¡Has dominado todas las áreas!";
+            ? `¡Hola, ${studentName}! Tu próximo desafío podría ser el área de ${categoryNames[nextChallenge.id]}.`
+            : `¡Felicidades, ${studentName}! ¡Has dominado todas las áreas!`;
 
         return { masteryLevels: levels, recommendation: rec };
-    }, [gameState]);
+    }, [gameState, studentName]);
 
     return (
         <div className="animate-fade-in">
@@ -86,9 +97,9 @@ export const MainMenu: React.FC<MainMenuProps> = ({ gameState, onSelectCategory,
                     <ConnectionIndicator status={connectionStatus} />
                     <VoiceToggleButton />
                 </div>
-                <h1 className="font-title text-5xl sm:text-7xl text-slate-800">Maestro Digital</h1>
+                <h1 className="font-title text-5xl sm:text-7xl text-slate-800 text-gradient">Maestro Digital</h1>
             </header>
-            <p className="text-lg mb-4">Este es tu panel de progreso. ¡Elige un modo para empezar!</p>
+            <p className="text-lg mb-4">Este es tu panel de progreso, {studentName}. ¡Elige un modo para empezar!</p>
             
             <div className="bg-blue-100 border-2 border-blue-400 text-blue-700 font-bold px-4 py-3 rounded-lg relative mb-6" role="alert">
                 <span className="block sm:inline">{recommendation}</span>
@@ -105,7 +116,10 @@ export const MainMenu: React.FC<MainMenuProps> = ({ gameState, onSelectCategory,
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
                 {masteryLevels.map(({ id, mastery, stars }) => (
                     <Card key={id} onClick={() => onSelectCategory(id)}>
-                        <h3 className="font-black text-slate-800 text-lg capitalize">{categoryNames[id]}</h3>
+                        <h3 className="font-black text-slate-800 text-lg capitalize flex items-center justify-center gap-2">
+                            <span className="text-2xl">{categoryIcons[id]}</span>
+                            <span>{categoryNames[id]}</span>
+                        </h3>
                         <div className="absolute top-2 right-2 bg-purple-500 text-white text-xs font-bold px-2 py-1 rounded-full">{mastery}%</div>
                         <p className="text-2xl text-yellow-400 mt-2">
                             {'★'.repeat(stars).padEnd(3, '☆')}
