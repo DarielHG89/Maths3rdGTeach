@@ -9,11 +9,15 @@ interface SpeechContextType {
     speak: (text: string) => void;
     isSupported: boolean;
     isSpeaking: boolean;
+    availableLocalVoices: SpeechSynthesisVoice[];
+    selectedVoiceURI: string | null;
+    selectVoice: (uri: string) => void;
 }
 
 const SpeechContext = createContext<SpeechContextType | undefined>(undefined);
 
 const SPEECH_MUTED_KEY = 'maestroDigitalMuted';
+const SELECTED_VOICE_URI_KEY = 'maestroDigitalSelectedVoiceURI';
 
 const sanitizeTextForSpeech = (text: string): string => {
     return text.replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, ' ').replace(/\s+/g, ' ').trim();
@@ -29,20 +33,21 @@ export const SpeechProvider: React.FC<{ children: ReactNode; voiceMode: VoiceMod
         }
     });
     const [isSupported, setIsSupported] = useState<boolean>(false);
-    const [spanishVoice, setSpanishVoice] = useState<SpeechSynthesisVoice | null>(null);
+    const [availableLocalVoices, setAvailableLocalVoices] = useState<SpeechSynthesisVoice[]>([]);
+    const [selectedVoiceURI, setSelectedVoiceURI] = useState<string | null>(() => {
+        return localStorage.getItem(SELECTED_VOICE_URI_KEY);
+    });
     const [isSpeaking, setIsSpeaking] = useState(false);
     
     const audioContextRef = useRef<AudioContext | null>(null);
     const currentAudioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+    const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
     const logicRef = useRef<any>();
 
     useEffect(() => {
         if (!audioContextRef.current) {
             const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
             if (AudioContext) {
-                 // FIX: The fallback for older browsers was faulty. It called the constructor with 0 arguments,
-                 // but some older implementations require a sample rate, causing a crash.
-                 // This has been updated to be more robust.
                  try {
                     audioContextRef.current = new AudioContext({ sampleRate: 24000 });
                  } catch (e) {
@@ -68,33 +73,56 @@ export const SpeechProvider: React.FC<{ children: ReactNode; voiceMode: VoiceMod
         if (checkSupport) {
             const loadVoices = () => {
                 const voices = window.speechSynthesis.getVoices();
-                const esVoice = voices.find(v => v.lang.startsWith('es-ES')) || voices.find(v => v.lang.startsWith('es-MX')) || voices.find(v => v.lang.startsWith('es'));
-                setSpanishVoice(esVoice);
+                const esVoices = voices.filter(v => v.lang.startsWith('es-'));
+                setAvailableLocalVoices(esVoices);
+                
+                // If a voice was selected but is no longer available, reset it.
+                if (selectedVoiceURI && !esVoices.some(v => v.voiceURI === selectedVoiceURI)) {
+                    setSelectedVoiceURI(null);
+                    localStorage.removeItem(SELECTED_VOICE_URI_KEY);
+                }
             };
             loadVoices();
             window.speechSynthesis.onvoiceschanged = loadVoices;
         }
          return () => window.removeEventListener('click', resumeAudio, true);
-    }, []);
+    }, [selectedVoiceURI]);
+
+    useEffect(() => {
+        if (!isSupported || isMuted) return;
+
+        const keepAliveInterval = setInterval(() => {
+            if (window.speechSynthesis && !window.speechSynthesis.speaking) {
+                window.speechSynthesis.resume();
+            }
+        }, 14000); 
+
+        return () => clearInterval(keepAliveInterval);
+    }, [isSupported, isMuted]);
 
     useEffect(() => {
         localStorage.setItem(SPEECH_MUTED_KEY, JSON.stringify(isMuted));
         if (isMuted) {
             window.speechSynthesis.cancel();
-            // Fix: Pass 0 to stop() for compatibility with older browser versions.
             currentAudioSourceRef.current?.stop(0);
             currentAudioSourceRef.current = null;
             setIsSpeaking(false);
         }
     }, [isMuted]);
     
-    // Store all logic and state dependencies in a ref. This allows the `speak` function
-    // to access the latest state without needing to be re-created itself.
+    const selectVoice = useCallback((uri: string) => {
+        setSelectedVoiceURI(uri);
+        localStorage.setItem(SELECTED_VOICE_URI_KEY, uri);
+    }, []);
+
     useEffect(() => {
+        const defaultSpanishVoice = availableLocalVoices.find(v => v.lang.startsWith('es-ES')) || availableLocalVoices.find(v => v.lang.startsWith('es-MX')) || availableLocalVoices[0];
         logicRef.current = {
             isMuted,
             isSupported,
-            spanishVoice,
+            defaultSpanishVoice,
+            availableLocalVoices,
+            selectedVoiceURI,
             voiceMode,
             setIsSpeaking,
             audioContextRef,
@@ -117,7 +145,6 @@ export const SpeechProvider: React.FC<{ children: ReactNode; voiceMode: VoiceMod
                         setIsSpeaking(false);
                         currentAudioSourceRef.current = null;
                     };
-                    // FIX: Pass 0 to start() for compatibility with older browser versions, which might require an argument.
                     source.start(0);
                     currentAudioSourceRef.current = source;
                 } catch (error) {
@@ -126,11 +153,9 @@ export const SpeechProvider: React.FC<{ children: ReactNode; voiceMode: VoiceMod
                 }
             }
         };
-    }, [isMuted, isSupported, spanishVoice, voiceMode]);
+    }, [isMuted, isSupported, availableLocalVoices, selectedVoiceURI, voiceMode]);
 
 
-    // This stable `speak` function's identity never changes. It acts as a gateway
-    // to the real logic stored in the ref, preventing re-render loops in consumers.
     const speak = useCallback((text: string) => {
         const logic = logicRef.current;
         if (!logic || logic.isMuted || !logic.isSupported) return;
@@ -139,32 +164,48 @@ export const SpeechProvider: React.FC<{ children: ReactNode; voiceMode: VoiceMod
         if (!sanitizedText) return;
 
         window.speechSynthesis.cancel();
-        // Fix: Pass 0 to stop() for compatibility with older browser versions.
         logic.currentAudioSourceRef.current?.stop(0);
         logic.setIsSpeaking(true);
 
-        const useLocal = logic.voiceMode === 'local' || (logic.voiceMode === 'auto' && !!logic.spanishVoice);
+        const useLocal = logic.voiceMode === 'local' || (logic.voiceMode === 'auto' && logic.availableLocalVoices.length > 0);
         
         if (useLocal) {
             const utterance = new SpeechSynthesisUtterance(sanitizedText);
-            if (logic.spanishVoice) utterance.voice = logic.spanishVoice;
-            utterance.lang = 'es-ES';
-            utterance.onend = () => logic.setIsSpeaking(false);
-            utterance.onerror = (e) => {
-                if (e.error === 'interrupted' || e.error === 'canceled') {
-                    console.debug(`Local speech intentionally stopped: ${e.error}`);
-                    return;
-                }
-                const errorDetail = typeof e.error === 'object' ? JSON.stringify(e.error) : e.error;
-                console.error(`Local speech synthesis error: ${errorDetail}`, { text: sanitizedText });
-                
-                if (logic.voiceMode === 'auto') {
-                    console.log("Local TTS failed, attempting fallback to online voice.");
-                    logic.playOnline(sanitizedText);
-                } else {
-                    logic.setIsSpeaking(false);
+            utteranceRef.current = utterance;
+
+            const selectedVoice = logic.availableLocalVoices.find((v: SpeechSynthesisVoice) => v.voiceURI === logic.selectedVoiceURI);
+
+            if (selectedVoice) {
+                utterance.voice = selectedVoice;
+            } else if (logic.defaultSpanishVoice) {
+                utterance.voice = logic.defaultSpanishVoice;
+            }
+            utterance.lang = utterance.voice?.lang || 'es-ES';
+
+            utterance.onend = () => {
+                logic.setIsSpeaking(false);
+                if (utteranceRef.current === utterance) {
+                    utteranceRef.current = null;
                 }
             };
+
+            utterance.onerror = (e) => {
+                if (e.error !== 'interrupted' && e.error !== 'canceled') {
+                    const errorDetail = typeof e.error === 'object' ? JSON.stringify(e.error) : e.error;
+                    console.error(`Local speech synthesis error: ${errorDetail}`, { text: sanitizedText });
+                    
+                    if (logic.voiceMode === 'auto') {
+                        console.log("Local TTS failed, attempting fallback to online voice.");
+                        logic.playOnline(sanitizedText);
+                    } else {
+                        logic.setIsSpeaking(false);
+                    }
+                }
+                if (utteranceRef.current === utterance) {
+                    utteranceRef.current = null;
+                }
+            };
+
             window.speechSynthesis.speak(utterance);
         } else {
             logic.playOnline(sanitizedText);
@@ -175,15 +216,16 @@ export const SpeechProvider: React.FC<{ children: ReactNode; voiceMode: VoiceMod
         setIsMuted(prev => !prev);
     }, []);
 
-    // Memoize the context value to prevent unnecessary re-renders in consumer components.
-    // `speak` and `toggleMute` are stable, so this object only changes when the boolean states change.
     const value = useMemo(() => ({ 
         isMuted, 
         toggleMute, 
         speak, 
         isSupported, 
-        isSpeaking 
-    }), [isMuted, toggleMute, speak, isSupported, isSpeaking]);
+        isSpeaking,
+        availableLocalVoices,
+        selectedVoiceURI,
+        selectVoice
+    }), [isMuted, toggleMute, speak, isSupported, isSpeaking, availableLocalVoices, selectedVoiceURI, selectVoice]);
 
     return <SpeechContext.Provider value={value}>{children}</SpeechContext.Provider>;
 };

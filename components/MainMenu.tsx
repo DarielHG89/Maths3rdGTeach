@@ -43,7 +43,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({ studentProfile, gameState, o
             Object.entries(categoryData.highScores).forEach(([level, score]) => {
                 const totalQuestions = questions[categoryId][parseInt(level)]?.length || 0;
                 if(totalQuestions > 0) {
-                    starsEarned += Math.round((score / totalQuestions) * 3);
+                    // FIX: Ensure score is treated as a number for the arithmetic operation.
+                    starsEarned += Math.round((Number(score) / totalQuestions) * 3);
                 }
             });
 

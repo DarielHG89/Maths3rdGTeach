@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { ConnectionStatus, VoiceMode } from '../../types';
 import { useSpeech } from '../../context/SpeechContext';
 
@@ -48,8 +48,35 @@ const AiToggleSwitch: React.FC<{ isEnabled: boolean, onToggle: () => void, isOnl
     );
 }
 
+const LocalVoiceSelector: React.FC<{
+    voices: SpeechSynthesisVoice[];
+    selectedURI: string | null;
+    onSelect: (uri: string) => void;
+    disabled: boolean;
+}> = ({ voices, selectedURI, onSelect, disabled }) => {
+    if (voices.length === 0) return null;
+
+    return (
+        <select
+            value={selectedURI || ''}
+            onChange={(e) => onSelect(e.target.value)}
+            disabled={disabled}
+            className="bg-slate-100 text-slate-600 font-bold py-1 px-2 rounded-md text-xs max-w-[120px] truncate"
+            title="Seleccionar voz local"
+        >
+            <option value="" disabled>Elige una voz</option>
+            {voices.map(voice => (
+                <option key={voice.voiceURI} value={voice.voiceURI}>
+                    {voice.name}
+                </option>
+            ))}
+        </select>
+    );
+};
+
+
 const VoiceControl: React.FC<{ voiceMode: VoiceMode, onVoiceModeChange: (mode: VoiceMode) => void, isOnline: boolean }> = ({ voiceMode, onVoiceModeChange, isOnline }) => {
-    const { isMuted, toggleMute, isSupported, isSpeaking } = useSpeech();
+    const { isMuted, toggleMute, isSupported, isSpeaking, availableLocalVoices, selectedVoiceURI, selectVoice } = useSpeech();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -91,7 +118,7 @@ const VoiceControl: React.FC<{ voiceMode: VoiceMode, onVoiceModeChange: (mode: V
                     {currentModeLabel} <span className={`transition-transform transform ${isMenuOpen ? 'rotate-180' : ''}`}>▾</span>
                 </button>
                 {isMenuOpen && (
-                    <div className="absolute right-0 mt-2 w-32 bg-white rounded-md shadow-lg z-10 border border-slate-200">
+                    <div className="absolute right-0 mt-2 w-36 bg-white rounded-md shadow-lg z-10 border border-slate-200">
                         {modes.map(mode => (
                              <button
                                 key={mode.key}
@@ -108,6 +135,12 @@ const VoiceControl: React.FC<{ voiceMode: VoiceMode, onVoiceModeChange: (mode: V
                     </div>
                 )}
             </div>
+             <LocalVoiceSelector 
+                voices={availableLocalVoices}
+                selectedURI={selectedVoiceURI}
+                onSelect={selectVoice}
+                disabled={voiceMode !== 'local'}
+            />
         </div>
     );
 };
@@ -116,22 +149,29 @@ export const GlobalHeader: React.FC<GlobalHeaderProps> = ({ onBack, title, conne
     const [isSettingsVisible, setIsSettingsVisible] = useState(false);
     const settingsTimerRef = useRef<number | null>(null);
 
-    const showSettings = () => {
+    const clearHideTimer = () => {
         if (settingsTimerRef.current) {
             clearTimeout(settingsTimerRef.current);
+            settingsTimerRef.current = null;
         }
-        setIsSettingsVisible(true);
+    };
+
+    const startHideTimer = useCallback(() => {
+        clearHideTimer();
         settingsTimerRef.current = window.setTimeout(() => {
             setIsSettingsVisible(false);
-        }, 5000);
+        }, 5000); // Hide after 5 seconds of inactivity
+    }, []);
+    
+    const showSettings = () => {
+        setIsSettingsVisible(true);
+        startHideTimer(); // Start countdown when settings are shown
     };
 
     useEffect(() => {
         // Cleanup timer on component unmount
         return () => {
-            if (settingsTimerRef.current) {
-                clearTimeout(settingsTimerRef.current);
-            }
+            clearHideTimer();
         };
     }, []);
     
@@ -150,15 +190,13 @@ export const GlobalHeader: React.FC<GlobalHeaderProps> = ({ onBack, title, conne
             <div className="w-1/4 flex justify-end items-center">
                 <div className="flex items-center gap-2">
                     <div 
-                        className={`flex items-center gap-2 transition-opacity duration-300 ${isSettingsVisible ? 'opacity-100' : 'opacity-0'}`}
+                        onMouseEnter={clearHideTimer}
+                        onMouseLeave={startHideTimer}
+                        className={`flex items-center gap-2 transition-opacity duration-300 ${isSettingsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                     >
-                        {isSettingsVisible && (
-                            <>
-                                <AiToggleSwitch isEnabled={isAiEnabled} onToggle={onToggleAi} isOnline={connectionStatus === 'online'} />
-                                <ConnectionIndicator status={connectionStatus} />
-                                <VoiceControl voiceMode={voiceMode} onVoiceModeChange={onVoiceModeChange} isOnline={connectionStatus === 'online'} />
-                            </>
-                        )}
+                        <AiToggleSwitch isEnabled={isAiEnabled} onToggle={onToggleAi} isOnline={connectionStatus === 'online'} />
+                        <ConnectionIndicator status={connectionStatus} />
+                        <VoiceControl voiceMode={voiceMode} onVoiceModeChange={onVoiceModeChange} isOnline={connectionStatus === 'online'} />
                     </div>
                     <button
                         onClick={showSettings}
