@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { QuizConfig, StudentProfile } from '../types';
-// Fix: Import 'generateExplanation' to resolve the undefined function error.
 import { generateHint, generateExplanation } from '../services/aiService';
 import { Button } from './common/Button';
 import { useSpeech } from '../context/SpeechContext';
@@ -23,29 +22,33 @@ export const Quiz: React.FC<QuizProps> = ({ quizConfig, onQuizEnd, onBack, isAiE
     const [hintText, setHintText] = useState<string | null>(null);
     const [hintCycleIndex, setHintCycleIndex] = useState(0); // Tracks local hint cycle
     const [aiHintAttempted, setAiHintAttempted] = useState(false); // Tracks if AI hint was tried
-    const { speak, isMuted } = useSpeech();
+    const { speak } = useSpeech();
 
     const currentQuestion = quizConfig.questions[questionIndex];
     const inputRef = useRef<HTMLInputElement>(null);
 
+    // This effect resets the state ONLY when the question changes.
+    // It is decoupled from the voice context to prevent unintended resets.
     useEffect(() => {
         setIsAnswered(false);
         setFeedback(null);
         setUserAnswer('');
         setHintText(null);
-        setHintCycleIndex(0); 
+        setHintCycleIndex(0);
         setAiHintAttempted(false);
         inputRef.current?.focus();
+    }, [questionIndex]);
 
-        speak(currentQuestion.question);
+    // This single effect handles speaking the question and options sequentially.
+    useEffect(() => {
+        let textToSpeak = currentQuestion.question;
         if (currentQuestion.type === 'mcq' && currentQuestion.options) {
-            const optionsText = `Opciones: ${currentQuestion.options.join(', ')}`;
-            // Use timeout to let the question be read first, if voice is on
-            const delay = isMuted ? 0 : 2000;
-            setTimeout(() => speak(optionsText), delay);
+            // Add a pause between the question and options for a more natural flow.
+            // TTS engines typically interpret this punctuation as a pause.
+            textToSpeak += `. ... Opciones son: ${currentQuestion.options.join(', ')}`;
         }
-
-    }, [questionIndex, currentQuestion, speak, isMuted]);
+        speak(textToSpeak);
+    }, [questionIndex, currentQuestion, speak]);
     
     const handleHint = async () => {
         // AI is enabled and we haven't tried getting an AI hint yet for this question
@@ -166,18 +169,18 @@ export const Quiz: React.FC<QuizProps> = ({ quizConfig, onQuizEnd, onBack, isAiE
                 )}
             </div>
             
-            {hintText && (
-                 <div className="mt-4 p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 rounded-r-lg animate-fade-in text-left">
-                    <p><strong className="font-bold">Pista:</strong> {hintText}</p>
-                </div>
-            )}
-
             <div className="mt-4 text-center">
                 <Button onClick={handleHint} disabled={isLoadingAI || isAnswered} variant="warning" className="text-sm px-4 py-2">
                     {isLoadingAI ? "Pensando..." : "💡 Pista"}
                 </Button>
             </div>
             
+            {hintText && (
+                 <div className="mt-4 p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 rounded-r-lg animate-fade-in text-left">
+                    <p><strong className="font-bold">Pista:</strong> {hintText}</p>
+                </div>
+            )}
+
             {isAnswered && (
                 <div className="mt-6 p-4 rounded-lg bg-slate-100 animate-fade-in">
                     {feedback && (

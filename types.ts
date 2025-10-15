@@ -6,6 +6,8 @@ export type CategoryId = 'numeros' | 'suma_resta' | 'multi_divi' | 'problemas' |
 
 export type ConnectionStatus = 'checking' | 'online' | 'offline';
 
+export type VoiceMode = 'auto' | 'local' | 'online';
+
 export interface Question {
     type: 'mcq' | 'input';
     question: string;

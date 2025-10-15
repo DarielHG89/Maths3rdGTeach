@@ -90,6 +90,36 @@ export async function generateHint(question: Question, profile: StudentProfile):
     }
 }
 
+export async function generateSpeech(text: string): Promise<string> {
+    if (!isApiAvailable) {
+        throw new Error("AI service is not available for speech generation.");
+    }
+    try {
+        const promptText = `Lee el siguiente texto en español: "${text}"`;
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash-preview-tts",
+            contents: [{ parts: [{ text: promptText }] }],
+            config: {
+                responseModalities: [Modality.AUDIO],
+                speechConfig: {
+                    voiceConfig: {
+                      prebuiltVoiceConfig: { voiceName: 'Kore' },
+                    },
+                },
+            },
+        });
+        const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+        if (base64Audio) {
+            return base64Audio;
+        } else {
+            throw new Error("No audio data received from TTS API.");
+        }
+    } catch (error) {
+        console.error("Error generating AI speech:", error);
+        throw error;
+    }
+}
+
 
 export function connectToLive(
     onMessage: (message: LiveServerMessage) => void,

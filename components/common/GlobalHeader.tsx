@@ -1,5 +1,5 @@
-import React from 'react';
-import type { ConnectionStatus } from '../../types';
+import React, { useState, useEffect, useRef } from 'react';
+import type { ConnectionStatus, VoiceMode } from '../../types';
 import { useSpeech } from '../../context/SpeechContext';
 
 interface GlobalHeaderProps {
@@ -8,6 +8,8 @@ interface GlobalHeaderProps {
     connectionStatus: ConnectionStatus;
     isAiEnabled: boolean;
     onToggleAi: () => void;
+    voiceMode: VoiceMode;
+    onVoiceModeChange: (mode: VoiceMode) => void;
 }
 
 const ConnectionIndicator: React.FC<{ status: ConnectionStatus }> = ({ status }) => {
@@ -44,25 +46,71 @@ const AiToggleSwitch: React.FC<{ isEnabled: boolean, onToggle: () => void, isOnl
     );
 }
 
-const VoiceToggleButton = () => {
-    const { isMuted, toggleMute, isSupported } = useSpeech();
+const VoiceControl: React.FC<{ voiceMode: VoiceMode, onVoiceModeChange: (mode: VoiceMode) => void, isOnline: boolean }> = ({ voiceMode, onVoiceModeChange, isOnline }) => {
+    const { isMuted, toggleMute, isSupported, isSpeaking } = useSpeech();
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
 
-    if (!isSupported) {
-        return null;
-    }
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                setIsMenuOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    if (!isSupported) return null;
+
+    const modes: { key: VoiceMode, label: string }[] = [
+        { key: 'auto', label: 'Auto' },
+        { key: 'local', label: 'Local' },
+        { key: 'online', label: 'Online (IA)' }
+    ];
+
+    const currentModeLabel = modes.find(m => m.key === voiceMode)?.label || 'Voz';
 
     return (
-        <button
-            onClick={toggleMute}
-            className={`w-8 h-8 rounded-full flex items-center justify-center text-md transition-colors ${isMuted ? 'bg-slate-200 text-slate-500' : 'bg-yellow-400 text-white'}`}
-            title={isMuted ? 'Activar voz' : 'Silenciar voz'}
-        >
-            {isMuted ? '🔇' : '🔊'}
-        </button>
-    )
-}
+        <div className="flex items-center gap-2">
+            <button
+                onClick={toggleMute}
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-md transition-colors ${isMuted ? 'bg-slate-200 text-slate-500' : 'bg-yellow-400 text-white'}`}
+                title={isMuted ? 'Activar voz' : 'Silenciar voz'}
+            >
+                {isSpeaking ? '💬' : (isMuted ? '🔇' : '🔊')}
+            </button>
+            <div className="relative" ref={menuRef}>
+                 <button 
+                    onClick={() => setIsMenuOpen(prev => !prev)} 
+                    className="bg-slate-100 text-slate-600 font-bold py-1 px-2 rounded-md text-xs flex items-center gap-1"
+                    title="Seleccionar modo de voz"
+                 >
+                    {currentModeLabel} <span className={`transition-transform transform ${isMenuOpen ? 'rotate-180' : ''}`}>▾</span>
+                </button>
+                {isMenuOpen && (
+                    <div className="absolute right-0 mt-2 w-32 bg-white rounded-md shadow-lg z-10 border border-slate-200">
+                        {modes.map(mode => (
+                             <button
+                                key={mode.key}
+                                onClick={() => {
+                                    onVoiceModeChange(mode.key);
+                                    setIsMenuOpen(false);
+                                }}
+                                className="block w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50 disabled:bg-transparent disabled:cursor-not-allowed"
+                                disabled={!isOnline && mode.key === 'online'}
+                            >
+                                {mode.label}
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
 
-export const GlobalHeader: React.FC<GlobalHeaderProps> = ({ onBack, title, connectionStatus, isAiEnabled, onToggleAi }) => {
+export const GlobalHeader: React.FC<GlobalHeaderProps> = ({ onBack, title, connectionStatus, isAiEnabled, onToggleAi, voiceMode, onVoiceModeChange }) => {
     return (
         <header className="relative w-full p-3 flex justify-between items-center border-b-2 border-slate-200 flex-shrink-0">
             <div className="w-1/4 flex justify-start">
@@ -78,7 +126,7 @@ export const GlobalHeader: React.FC<GlobalHeaderProps> = ({ onBack, title, conne
             <div className="w-1/4 flex justify-end items-center gap-2">
                  <AiToggleSwitch isEnabled={isAiEnabled} onToggle={onToggleAi} isOnline={connectionStatus === 'online'} />
                  <ConnectionIndicator status={connectionStatus} />
-                 <VoiceToggleButton />
+                 <VoiceControl voiceMode={voiceMode} onVoiceModeChange={onVoiceModeChange} isOnline={connectionStatus === 'online'} />
             </div>
         </header>
     );

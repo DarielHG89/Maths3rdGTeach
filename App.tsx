@@ -8,7 +8,7 @@ import { NameEntry } from './components/NameEntry';
 import { FreePracticeMenu } from './components/FreePracticeMenu';
 import { GlobalHeader } from './components/common/GlobalHeader';
 import { useGameState } from './hooks/useGameState';
-import type { Screen, QuizConfig, CategoryId, ConnectionStatus, Question, StudentProfile } from './types';
+import type { Screen, QuizConfig, CategoryId, ConnectionStatus, Question, StudentProfile, VoiceMode } from './types';
 import { questions } from './data/questions';
 import { checkGeminiConnection } from './services/aiService';
 import { SpeechProvider } from './context/SpeechContext';
@@ -25,6 +25,7 @@ function shuffleArray<T,>(array: T[]): T[] {
 
 const STUDENT_PROFILE_KEY = 'maestroDigitalStudentProfile';
 const AI_ENABLED_KEY = 'maestroDigitalAiEnabled';
+const VOICE_MODE_KEY = 'maestroDigitalVoiceMode';
 
 export default function App() {
     const [screen, setScreen] = useState<Screen>('name-entry');
@@ -37,6 +38,10 @@ export default function App() {
     const [isAiEnabled, setIsAiEnabled] = useState<boolean>(() => {
         const saved = localStorage.getItem(AI_ENABLED_KEY);
         return saved ? JSON.parse(saved) : true;
+    });
+    const [voiceMode, setVoiceMode] = useState<VoiceMode>(() => {
+        const saved = localStorage.getItem(VOICE_MODE_KEY);
+        return (saved as VoiceMode) || 'auto';
     });
 
     const { gameState, updateHighScore, unlockNextLevel } = useGameState();
@@ -61,6 +66,11 @@ export default function App() {
             localStorage.setItem(AI_ENABLED_KEY, JSON.stringify(newState));
             return newState;
         });
+    };
+
+    const handleVoiceModeChange = (mode: VoiceMode) => {
+        setVoiceMode(mode);
+        localStorage.setItem(VOICE_MODE_KEY, mode);
     };
 
     const handleProfileSubmit = (profile: StudentProfile) => {
@@ -231,7 +241,7 @@ export default function App() {
     }, [screen, studentProfile, gameState, handleSelectCategory, handleStartWeeklyExam, handleStartRefreshExam, handleStartLiveConversation, handleStartFreePractice, connectionStatus, isAiEnabled, handleProfileSubmit, handleSelectCategoryForFreePractice, handleBackToMenu, selectedCategory, handleStartPractice, isFreeMode, handleBackToFreePracticeMenu, quizConfig, handleQuizEnd, handleBackToLevelSelection, finalScore]);
     
     return (
-        <SpeechProvider>
+        <SpeechProvider voiceMode={voiceMode}>
             <div className="flex justify-center items-center min-h-screen p-4">
                 <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-2xl w-full max-w-4xl text-slate-700 border border-white/20 flex flex-col h-[95vh] max-h-[95vh]">
                     {screenConfig.showHeader && (
@@ -241,6 +251,8 @@ export default function App() {
                             connectionStatus={connectionStatus}
                             isAiEnabled={isAiEnabled}
                             onToggleAi={handleToggleAi}
+                            voiceMode={voiceMode}
+                            onVoiceModeChange={handleVoiceModeChange}
                         />
                     )}
                     <main className="flex-grow overflow-y-auto p-4 sm:p-8">
