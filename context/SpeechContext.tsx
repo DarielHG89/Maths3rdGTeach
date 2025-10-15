@@ -40,7 +40,19 @@ export const SpeechProvider: React.FC<{ children: ReactNode; voiceMode: VoiceMod
         if (!audioContextRef.current) {
             const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
             if (AudioContext) {
-                 audioContextRef.current = new AudioContext({ sampleRate: 24000 });
+                 // FIX: The fallback for older browsers was faulty. It called the constructor with 0 arguments,
+                 // but some older implementations require a sample rate, causing a crash.
+                 // This has been updated to be more robust.
+                 try {
+                    audioContextRef.current = new AudioContext({ sampleRate: 24000 });
+                 } catch (e) {
+                    console.warn("Could not create AudioContext with specific sample rate, falling back to default.", e);
+                    try {
+                       audioContextRef.current = new AudioContext();
+                    } catch (e2) {
+                       console.error("Could not create any AudioContext. Online speech will be disabled.", e2);
+                    }
+                 }
             }
         }
         const resumeAudio = () => {
@@ -105,7 +117,8 @@ export const SpeechProvider: React.FC<{ children: ReactNode; voiceMode: VoiceMod
                         setIsSpeaking(false);
                         currentAudioSourceRef.current = null;
                     };
-                    source.start();
+                    // FIX: Pass 0 to start() for compatibility with older browser versions, which might require an argument.
+                    source.start(0);
                     currentAudioSourceRef.current = source;
                 } catch (error) {
                     console.error("Online speech synthesis error:", error);

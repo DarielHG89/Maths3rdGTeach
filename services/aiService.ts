@@ -66,7 +66,7 @@ export async function generateHint(question: Question, profile: StudentProfile):
         throw new Error("AI service is not available.");
     }
     try {
-        const prompt = `La pregunta es: "${question.question}". Dame una pista muy creativa y divertida para un ${profile.gender === 'boy' ? 'niño' : 'niña'} de ${profile.age} años. Usa una analogía o una pequeña historia para explicar el concepto. Por ejemplo, si es una multiplicación, podrías hablar de galaxias de galletas 🌌🍪. ¡Hazlo memorable y nada aburrido! Es crucial que, bajo NINGUNA circunstancia, reveles la respuesta final ("${question.answer}") ni números que lleven directamente a ella.`;
+        const prompt = `La pregunta es: "${question.question}". Dame una pista muy creativa y divertida para un ${profile.gender === 'boy' ? 'niño' : 'ña'} de ${profile.age} años. Usa una analogía o una pequeña historia para explicar el concepto. Por ejemplo, si es una multiplicación, podrías hablar de galaxias de galletas 🌌🍪. ¡Hazlo memorable y nada aburrido! Es crucial y de máxima importancia que, bajo NINGUNA circunstancia, reveles la respuesta final ("${question.answer}") ni números que lleven directamente a ella. NO MUESTRES EL RESULTADO. ENFÓCATE EN EL MÉTODO.`;
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',

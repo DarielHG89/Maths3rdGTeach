@@ -1,4 +1,3 @@
-// Fix: Removed self-import of Screen type which caused a conflict.
 
 export type Screen = 'main-menu' | 'level-selection' | 'quiz' | 'results' | 'live-conversation' | 'name-entry' | 'free-practice-menu';
 
@@ -11,10 +10,11 @@ export type VoiceMode = 'auto' | 'local' | 'online';
 export interface Question {
     type: 'mcq' | 'input';
     question: string;
-    options?: string[];
+    options?: { text: string; imageUrl?: string }[] | string[];
     answer: string;
     explanation?: string;
     hints?: string[];
+    imageUrl?: string;
 }
 
 export interface QuizConfig {
@@ -28,6 +28,7 @@ export interface QuizConfig {
 export interface CategoryGameState {
     unlockedLevel: number;
     highScores: { [level: number]: number };
+    skillHistory: { score: number; timestamp: number; level: number }[];
 }
 
 export interface GameState {

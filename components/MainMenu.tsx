@@ -1,9 +1,10 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { GameState, CategoryId, ConnectionStatus, StudentProfile } from '../types';
 import { questions } from '../data/questions';
 import { Card } from './common/Card';
 import { Button } from './common/Button';
 import { categoryNames } from '../utils/constants';
+import { SkillChart } from './common/SkillChart';
 
 interface MainMenuProps {
     studentProfile: StudentProfile | null;
@@ -29,6 +30,7 @@ const categoryIcons: Record<CategoryId, string> = {
 
 export const MainMenu: React.FC<MainMenuProps> = ({ studentProfile, gameState, onSelectCategory, onStartWeeklyExam, onStartRefreshExam, onStartLiveConversation, onStartFreePractice, connectionStatus, isAiEnabled }) => {
     
+    const [modalData, setModalData] = useState<{ categoryId: CategoryId; history: { score: number; timestamp: number; level: number }[] } | null>(null);
     const studentName = studentProfile?.name || 'Estudiante';
 
     const { masteryLevels, recommendation } = useMemo(() => {
@@ -60,6 +62,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ studentProfile, gameState, o
     }, [gameState, studentName]);
 
     return (
+        <>
         <div className="animate-fade-in text-center">
             <h1 className="font-title text-5xl sm:text-7xl text-slate-800 text-gradient">Maestro Digital</h1>
             <p className="text-lg mb-4 mt-4">Este es tu panel de progreso, {studentName}. ¡Elige un modo para empezar!</p>
@@ -78,15 +81,27 @@ export const MainMenu: React.FC<MainMenuProps> = ({ studentProfile, gameState, o
             <h2 className="text-3xl font-black text-slate-800 mb-4">Modos de Práctica</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
                 {masteryLevels.map(({ id, mastery, stars }) => (
-                    <Card key={id} onClick={() => onSelectCategory(id)}>
-                        <h3 className="font-black text-slate-800 text-lg capitalize flex items-center justify-center gap-2">
-                            <span className="text-2xl">{categoryIcons[id]}</span>
-                            <span>{categoryNames[id]}</span>
-                        </h3>
-                        <div className="absolute top-2 right-2 bg-purple-500 text-white text-xs font-bold px-2 py-1 rounded-full">{mastery}%</div>
-                        <p className="text-2xl text-yellow-400 mt-2">
-                            {'★'.repeat(stars).padEnd(3, '☆')}
-                        </p>
+                    <Card key={id} onClick={() => onSelectCategory(id)} className="flex flex-col justify-between">
+                        <div>
+                            <h3 className="font-black text-slate-800 text-lg capitalize flex items-center justify-center gap-2">
+                                <span className="text-2xl">{categoryIcons[id]}</span>
+                                <span>{categoryNames[id]}</span>
+                            </h3>
+                            <div className="absolute top-2 right-2 bg-purple-500 text-white text-xs font-bold px-2 py-1 rounded-full">{mastery}%</div>
+                            <p className="text-2xl text-yellow-400 mt-2">
+                                {'★'.repeat(stars).padEnd(3, '☆')}
+                            </p>
+                        </div>
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setModalData({ categoryId: id, history: gameState[id].skillHistory });
+                            }}
+                            disabled={!gameState[id].skillHistory || gameState[id].skillHistory.length < 2}
+                            className="text-xs bg-slate-200 text-slate-600 font-bold py-1 px-2 rounded-md mt-2 hover:bg-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Ver Progreso 📈
+                        </button>
                     </Card>
                 ))}
             </div>
@@ -100,5 +115,16 @@ export const MainMenu: React.FC<MainMenuProps> = ({ studentProfile, gameState, o
                 <Button variant="primary" onClick={onStartFreePractice} className="w-full sm:w-auto">🤸 Práctica Libre</Button>
             </div>
         </div>
+
+        {modalData && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fade-in" onClick={() => setModalData(null)}>
+                <div className="bg-white rounded-lg p-6 w-full max-w-lg shadow-xl" onClick={e => e.stopPropagation()}>
+                    <h3 className="text-2xl font-bold text-slate-800 mb-4">Progreso de Habilidad en {categoryNames[modalData.categoryId]}</h3>
+                    <SkillChart data={modalData.history} />
+                    <Button onClick={() => setModalData(null)} className="mt-4">Cerrar</Button>
+                </div>
+            </div>
+        )}
+        </>
     );
 };

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { forwardRef } from 'react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
     children: React.ReactNode;
@@ -6,7 +6,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
     className?: string;
 }
 
-export const Button: React.FC<ButtonProps> = ({ children, variant = 'primary', className = '', ...props }) => {
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({ children, variant = 'primary', className = '', ...props }, ref) => {
     const baseClasses = 'px-6 py-3 text-lg font-bold text-white rounded-xl shadow-md transition-all duration-200 ease-in-out transform hover:-translate-y-1 active:translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none';
     
     const variantClasses = {
@@ -17,8 +17,10 @@ export const Button: React.FC<ButtonProps> = ({ children, variant = 'primary', c
     };
     
     return (
-        <button className={`${baseClasses} ${variantClasses[variant]} ${className}`} {...props}>
+        <button ref={ref} className={`${baseClasses} ${variantClasses[variant]} ${className}`} {...props}>
             {children}
         </button>
     );
-};
+});
+
+Button.displayName = 'Button';

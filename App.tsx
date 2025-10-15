@@ -1,3 +1,5 @@
+
+
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { MainMenu } from './components/MainMenu';
 import { LevelSelection } from './components/LevelSelection';
@@ -37,14 +39,14 @@ export default function App() {
     const [isFreeMode, setIsFreeMode] = useState(false);
     const [isAiEnabled, setIsAiEnabled] = useState<boolean>(() => {
         const saved = localStorage.getItem(AI_ENABLED_KEY);
-        return saved ? JSON.parse(saved) : true;
+        return saved ? JSON.parse(saved) : false;
     });
     const [voiceMode, setVoiceMode] = useState<VoiceMode>(() => {
         const saved = localStorage.getItem(VOICE_MODE_KEY);
-        return (saved as VoiceMode) || 'auto';
+        return (saved as VoiceMode) || 'local';
     });
 
-    const { gameState, updateHighScore, unlockNextLevel } = useGameState();
+    const { gameState, updateHighScore, unlockNextLevel, addSkillRecord } = useGameState();
 
     useEffect(() => {
         const savedProfile = localStorage.getItem(STUDENT_PROFILE_KEY);
@@ -92,12 +94,14 @@ export default function App() {
     }, []);
     
     const handleStartPractice = useCallback((categoryId: CategoryId, level: number) => {
+        const questionPool = questions[categoryId][level] || [];
+        const practiceQuestions = shuffleArray([...questionPool]).slice(0, 10); // Take 10 random questions for variety
         setQuizConfig({
             type: 'practice',
             categoryId,
             level,
             name: `${categoryNames[categoryId]} - Nivel ${level}`,
-            questions: shuffleArray([...questions[categoryId][level]])
+            questions: practiceQuestions
         });
         setScreen('quiz');
     }, []);
@@ -147,15 +151,40 @@ export default function App() {
     }, [gameState]);
 
 
-    const handleQuizEnd = useCallback((score: number, total: number) => {
-        if (quizConfig?.type === 'practice' && quizConfig.categoryId && quizConfig.level && !isFreeMode) {
+    const handleQuizEnd = useCallback((score: number, total: number, totalTime: number) => {
+        if (quizConfig?.type === 'practice' && quizConfig.categoryId && quizConfig.level) {
             const { categoryId, level } = quizConfig;
-            updateHighScore(categoryId, level, score);
-            unlockNextLevel(categoryId, level, score, total);
+            
+            // Calculate Skill Score
+            const accuracy = total > 0 ? score / total : 0;
+            const timePerQuestion = total > 0 ? totalTime / total : 0;
+            const difficultyMultiplier = 1 + (level - 1) * 0.25; // 1, 1.25, 1.5
+
+            // Base score on accuracy
+            let skillScore = accuracy * 1000;
+            
+            // Bonus/penalty for time
+            const targetTime = 15; // seconds per question
+            const timeBonus = (targetTime - timePerQuestion) * 10;
+            skillScore += timeBonus;
+            
+            // Apply difficulty multiplier
+            skillScore *= difficultyMultiplier;
+
+            // Ensure score is not negative
+            skillScore = Math.max(0, skillScore);
+            
+            // FIX: Pass the 'level' to 'addSkillRecord' to match the required type.
+            addSkillRecord(categoryId, skillScore, level);
+
+            if (!isFreeMode) {
+                updateHighScore(categoryId, level, score);
+                unlockNextLevel(categoryId, level, score, total);
+            }
         }
         setFinalScore({ score, total });
         setScreen('results');
-    }, [quizConfig, updateHighScore, unlockNextLevel, isFreeMode]);
+    }, [quizConfig, updateHighScore, unlockNextLevel, addSkillRecord, isFreeMode]);
 
     const handleBackToMenu = useCallback(() => {
         setQuizConfig(null);
