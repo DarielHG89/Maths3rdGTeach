@@ -4,6 +4,7 @@ import type { LiveServerMessage } from '@google/genai';
 import { connectToLive } from '../services/aiService';
 import { createBlob, decode, decodeAudioData } from '../utils/audio';
 import type { TranscriptEntry } from '../types';
+import { useSpeech } from '../context/SpeechContext';
 
 interface LiveConversationProps {
     onBack: () => void;
@@ -35,6 +36,7 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
     const statusRef = useRef<ConversationStatus>('idle');
     const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const { speak } = useSpeech();
 
     // Fix: Using `any` for sessionRef as LiveSession type is no longer exported.
     const sessionRef = useRef<any | null>(null);
@@ -48,8 +50,13 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
     const turnCompleteReceivedRef = useRef<boolean>(false);
     const isStoppingRef = useRef<boolean>(false);
     
+    const transcriptRef = useRef<TranscriptEntry[]>([]);
     const processMessageRef = useRef<(message: LiveServerMessage) => void>();
     
+    useEffect(() => {
+        transcriptRef.current = transcript;
+    }, [transcript]);
+
     const setStatus = (newStatus: ConversationStatus) => {
         statusRef.current = newStatus;
         setStatusState(newStatus);
@@ -59,11 +66,34 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
         if ((!force && statusRef.current === 'idle') || isStoppingRef.current) return;
 
         isStoppingRef.current = true;
+        
+        const currentTranscript = transcriptRef.current;
+        if (currentTranscript.length > 0) {
+            try {
+                const TRANSCRIPTS_KEY = 'maestroDigitalTranscripts';
+                const MAX_TRANSCRIPTS = 10;
+                const savedTranscriptsRaw = localStorage.getItem(TRANSCRIPTS_KEY);
+                const savedTranscripts = savedTranscriptsRaw ? JSON.parse(savedTranscriptsRaw) : [];
+                
+                const newTranscriptRecord = {
+                    timestamp: Date.now(),
+                    transcript: currentTranscript.filter(entry => entry.text.trim() !== '')
+                };
+
+                if (newTranscriptRecord.transcript.length > 0) {
+                    const updatedTranscripts = [newTranscriptRecord, ...savedTranscripts].slice(0, MAX_TRANSCRIPTS);
+                    localStorage.setItem(TRANSCRIPTS_KEY, JSON.stringify(updatedTranscripts));
+                    console.log('Conversation transcript saved.');
+                }
+            } catch (err) {
+                console.error("Failed to save transcript:", err);
+            }
+        }
+        
         setStatus('idle');
         
-        // Fix: According to guidelines, close() takes no arguments.
-        // The previous FIX comment and implementation might have been based on an older/incorrect SDK version.
-        sessionRef.current?.close();
+        // FIX: The session.close() method expects one argument. Passing 'undefined' to satisfy this requirement.
+        sessionRef.current?.close(undefined);
         sessionRef.current = null;
 
         mediaStreamRef.current?.getTracks().forEach(track => track.stop());
@@ -110,6 +140,8 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
                         setStatus('processing');
                     }
                     const text = message.serverContent.outputTranscription.text;
+                    // Read the incoming transcribed text from the model aloud.
+                    speak(text);
                     setTranscript(prev => {
                         const last = prev[prev.length - 1];
                         if (last?.source === 'model' && !last.isFinal) {
@@ -168,7 +200,7 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
                 }
             }
         };
-    }, []);
+    }, [speak]);
 
     const startConversation = useCallback(async () => {
         isStoppingRef.current = false;

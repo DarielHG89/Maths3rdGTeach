@@ -11,10 +11,11 @@ interface LevelSelectionProps {
     onBack: () => void;
 }
 
-const levelDetails: Record<number, { name: string; colorClasses: string; }> = {
-    1: { name: 'Fácil', colorClasses: 'border-green-400 bg-green-50/80 hover:bg-green-100' },
-    2: { name: 'Medio', colorClasses: 'border-blue-400 bg-blue-50/80 hover:bg-blue-100' },
-    3: { name: 'Difícil', colorClasses: 'border-purple-400 bg-purple-50/80 hover:bg-purple-100' }
+// Enhanced details for better visual distinction
+const levelDetails: Record<number, { name: string; color: string; bg: string; border: string; }> = {
+    1: { name: 'Fácil', color: 'text-green-800', bg: 'bg-green-100', border: 'border-green-500' },
+    2: { name: 'Medio', color: 'text-blue-800', bg: 'bg-blue-100', border: 'border-blue-500' },
+    3: { name: 'Difícil', color: 'text-purple-800', bg: 'bg-purple-100', border: 'border-purple-500' }
 };
 
 export const LevelSelection: React.FC<LevelSelectionProps> = ({ categoryId, gameState, onStartPractice, onBack }) => {
@@ -35,31 +36,33 @@ export const LevelSelection: React.FC<LevelSelectionProps> = ({ categoryId, game
                     const highScore = categoryData.highScores[level] || 0;
                     const totalQuestions = questions[categoryId][level].length;
                     const stars = totalQuestions > 0 ? Math.round((highScore / totalQuestions) * 3) : 0;
-                    const details = levelDetails[level] || { name: 'Extra', colorClasses: 'border-gray-400 bg-gray-50/80' };
+                    const details = levelDetails[level] || { name: 'Extra', color: 'text-gray-800', bg: 'bg-gray-100', border: 'border-gray-500' };
 
                     return (
                         <div key={level} className="relative">
                             <Card 
                                 onClick={!isLocked ? () => onStartPractice(categoryId, level) : undefined}
-                                className={`flex flex-col items-center justify-between min-h-[180px] ${!isLocked ? details.colorClasses : 'bg-slate-200'}`}
+                                className={`flex flex-col items-center justify-start min-h-[180px] !p-0 overflow-hidden ${isLocked ? 'filter grayscale' : ''}`}
                             >
-                                <div className="text-center">
-                                    <h4 className="text-xl font-bold">Nivel {level}</h4>
-                                    <p className="text-lg font-semibold text-slate-600">{details.name}</p>
+                                <div className={`w-full p-2 text-center ${details.bg} ${details.border} border-b-2`}>
+                                    <h4 className={`text-xl font-bold ${details.color}`}>Nivel {level}</h4>
+                                    <p className={`font-semibold ${details.color} opacity-90`}>{details.name}</p>
                                 </div>
 
-                                <div className={`text-3xl mt-2 ${isLocked ? 'filter grayscale' : 'text-yellow-400'}`}>
-                                    {'★'.repeat(stars).padEnd(3, '☆')}
+                                <div className="flex flex-col items-center justify-center flex-grow p-3">
+                                    <div className={`text-3xl mt-2 text-yellow-400`}>
+                                        {'★'.repeat(stars).padEnd(3, '☆')}
+                                    </div>
+                                    
+                                    <p className="mt-2 font-semibold text-slate-500">
+                                        Mejor: {highScore}/{totalQuestions}
+                                    </p>
                                 </div>
-                                
-                                <p className="mt-2 font-semibold text-slate-500">
-                                    Mejor: {highScore}/{totalQuestions}
-                                </p>
                             </Card>
                             {isLocked && (
-                                <div className="absolute inset-0 bg-slate-800/50 rounded-xl flex flex-col items-center justify-center text-white cursor-not-allowed">
-                                    <span className="text-5xl" role="img" aria-label="Bloqueado">🔒</span>
-                                    <span className="font-bold mt-2">Bloqueado</span>
+                                <div className="absolute inset-0 bg-slate-800/60 rounded-xl flex flex-col items-center justify-center text-white cursor-not-allowed">
+                                    <span className="text-6xl" role="img" aria-label="Bloqueado">🔒</span>
+                                    <span className="font-bold mt-2 text-lg">Bloqueado</span>
                                 </div>
                             )}
                         </div>
