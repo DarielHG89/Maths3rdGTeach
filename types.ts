@@ -1,3 +1,5 @@
+// Fix: Removed self-import of Screen type which caused a conflict.
+
 export type Screen = 'main-menu' | 'level-selection' | 'quiz' | 'results' | 'live-conversation' | 'name-entry' | 'free-practice-menu';
 
 export type CategoryId = 'numeros' | 'suma_resta' | 'multi_divi' | 'problemas' | 'geometria' | 'medidas' | 'reloj';
@@ -10,7 +12,7 @@ export interface Question {
     options?: string[];
     answer: string;
     explanation?: string;
-    hint?: string;
+    hints?: string[];
 }
 
 export interface QuizConfig {
@@ -35,4 +37,10 @@ export interface TranscriptEntry {
     source: 'user' | 'model';
     text: string;
     isFinal: boolean;
+}
+
+export interface StudentProfile {
+    name: string;
+    age: number;
+    gender: 'boy' | 'girl' | 'other';
 }

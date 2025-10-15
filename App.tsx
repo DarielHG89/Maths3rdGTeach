@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { MainMenu } from './components/MainMenu';
 import { LevelSelection } from './components/LevelSelection';
 import { Quiz } from './components/Quiz';
@@ -6,11 +6,13 @@ import { Results } from './components/Results';
 import { LiveConversation } from './components/LiveConversation';
 import { NameEntry } from './components/NameEntry';
 import { FreePracticeMenu } from './components/FreePracticeMenu';
+import { GlobalHeader } from './components/common/GlobalHeader';
 import { useGameState } from './hooks/useGameState';
-import type { Screen, QuizConfig, CategoryId, ConnectionStatus, Question } from './types';
+import type { Screen, QuizConfig, CategoryId, ConnectionStatus, Question, StudentProfile } from './types';
 import { questions } from './data/questions';
 import { checkGeminiConnection } from './services/aiService';
 import { SpeechProvider } from './context/SpeechContext';
+import { categoryNames } from './utils/constants';
 
 function shuffleArray<T,>(array: T[]): T[] {
     const newArray = [...array];
@@ -21,23 +23,28 @@ function shuffleArray<T,>(array: T[]): T[] {
     return newArray;
 }
 
-const STUDENT_NAME_KEY = 'maestroDigitalStudentName';
+const STUDENT_PROFILE_KEY = 'maestroDigitalStudentProfile';
+const AI_ENABLED_KEY = 'maestroDigitalAiEnabled';
 
 export default function App() {
-    const [screen, setScreen] = useState<Screen>('main-menu');
+    const [screen, setScreen] = useState<Screen>('name-entry');
     const [quizConfig, setQuizConfig] = useState<QuizConfig | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<CategoryId | null>(null);
     const [finalScore, setFinalScore] = useState<{ score: number; total: number } | null>(null);
     const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('checking');
-    const [studentName, setStudentName] = useState<string | null>(null);
+    const [studentProfile, setStudentProfile] = useState<StudentProfile | null>(null);
     const [isFreeMode, setIsFreeMode] = useState(false);
+    const [isAiEnabled, setIsAiEnabled] = useState<boolean>(() => {
+        const saved = localStorage.getItem(AI_ENABLED_KEY);
+        return saved ? JSON.parse(saved) : true;
+    });
 
     const { gameState, updateHighScore, unlockNextLevel } = useGameState();
 
     useEffect(() => {
-        const savedName = localStorage.getItem(STUDENT_NAME_KEY);
-        if (savedName) {
-            setStudentName(savedName);
+        const savedProfile = localStorage.getItem(STUDENT_PROFILE_KEY);
+        if (savedProfile) {
+            setStudentProfile(JSON.parse(savedProfile));
             setScreen('main-menu');
         } else {
             setScreen('name-entry');
@@ -48,9 +55,17 @@ export default function App() {
         });
     }, []);
 
-    const handleNameSubmit = (name: string) => {
-        localStorage.setItem(STUDENT_NAME_KEY, name);
-        setStudentName(name);
+    const handleToggleAi = () => {
+        setIsAiEnabled(prev => {
+            const newState = !prev;
+            localStorage.setItem(AI_ENABLED_KEY, JSON.stringify(newState));
+            return newState;
+        });
+    };
+
+    const handleProfileSubmit = (profile: StudentProfile) => {
+        localStorage.setItem(STUDENT_PROFILE_KEY, JSON.stringify(profile));
+        setStudentProfile(profile);
         setScreen('main-menu');
     };
 
@@ -71,7 +86,7 @@ export default function App() {
             type: 'practice',
             categoryId,
             level,
-            name: `${categoryId.replace('_', ' y ')} - Nivel ${level}`,
+            name: `${categoryNames[categoryId]} - Nivel ${level}`,
             questions: shuffleArray([...questions[categoryId][level]])
         });
         setScreen('quiz');
@@ -141,6 +156,8 @@ export default function App() {
     }, []);
 
     const handleBackToLevelSelection = useCallback(() => {
+        setQuizConfig(null);
+        setFinalScore(null);
         setScreen('level-selection');
     }, []);
 
@@ -156,60 +173,79 @@ export default function App() {
         setScreen('free-practice-menu');
     }, []);
 
-    const renderScreen = () => {
+    const screenConfig = useMemo(() => {
         switch (screen) {
             case 'name-entry':
-                return <NameEntry onNameSubmit={handleNameSubmit} />;
+                return {
+                    component: <NameEntry onProfileSubmit={handleProfileSubmit} />,
+                    showHeader: false,
+                };
             case 'main-menu':
-                return (
-                    <MainMenu
-                        studentName={studentName}
-                        gameState={gameState}
-                        onSelectCategory={handleSelectCategory}
-                        onStartWeeklyExam={handleStartWeeklyExam}
-                        onStartRefreshExam={handleStartRefreshExam}
-                        onStartLiveConversation={handleStartLiveConversation}
-                        onStartFreePractice={handleStartFreePractice}
-                        connectionStatus={connectionStatus}
-                    />
-                );
+                 return {
+                    component: <MainMenu studentProfile={studentProfile} gameState={gameState} onSelectCategory={handleSelectCategory} onStartWeeklyExam={handleStartWeeklyExam} onStartRefreshExam={handleStartRefreshExam} onStartLiveConversation={handleStartLiveConversation} onStartFreePractice={handleStartFreePractice} connectionStatus={connectionStatus} isAiEnabled={isAiEnabled}/>,
+                    showHeader: true,
+                };
             case 'free-practice-menu':
-                return <FreePracticeMenu onSelectCategory={handleSelectCategoryForFreePractice} onBack={handleBackToMenu} />;
+                return {
+                    component: <FreePracticeMenu onSelectCategory={handleSelectCategoryForFreePractice} />,
+                    title: 'Práctica Libre',
+                    onBack: handleBackToMenu,
+                    showHeader: true,
+                };
             case 'level-selection':
-                if (!selectedCategory) return null;
-                return (
-                    <LevelSelection
-                        categoryId={selectedCategory}
-                        gameState={gameState}
-                        onStartPractice={handleStartPractice}
-                        onBack={isFreeMode ? handleBackToFreePracticeMenu : handleBackToMenu}
-                        isFreeMode={isFreeMode}
-                    />
-                );
+                if (!selectedCategory) return { component: null, showHeader: false };
+                return {
+                    component: <LevelSelection categoryId={selectedCategory} gameState={gameState} onStartPractice={handleStartPractice} isFreeMode={isFreeMode} />,
+                    title: categoryNames[selectedCategory],
+                    onBack: isFreeMode ? handleBackToFreePracticeMenu : handleBackToMenu,
+                    showHeader: true,
+                };
             case 'quiz':
-                if (!quizConfig) return null;
-                return <Quiz quizConfig={quizConfig} onQuizEnd={handleQuizEnd} onBack={quizConfig.type === 'practice' ? handleBackToLevelSelection : handleBackToMenu} />;
+                if (!quizConfig || !studentProfile) return { component: null, showHeader: false };
+                return {
+                    component: <Quiz quizConfig={quizConfig} onQuizEnd={handleQuizEnd} onBack={quizConfig.type === 'practice' ? handleBackToLevelSelection : handleBackToMenu} isAiEnabled={isAiEnabled} studentProfile={studentProfile} />,
+                    title: quizConfig.name,
+                    onBack: quizConfig.type === 'practice' ? handleBackToLevelSelection : handleBackToMenu,
+                    showHeader: true,
+                };
             case 'results':
-                if (!finalScore) return null;
-                return (
-                    <Results
-                        score={finalScore.score}
-                        total={finalScore.total}
-                        onBack={handleBackToMenu}
-                    />
-                );
+                if (!finalScore) return { component: null, showHeader: false };
+                return {
+                    component: <Results score={finalScore.score} total={finalScore.total} onBack={handleBackToMenu} />,
+                    title: 'Resultados',
+                    showHeader: true,
+                };
             case 'live-conversation':
-                 return <LiveConversation onBack={handleBackToMenu} />;
+                 return {
+                    component: <LiveConversation onBack={handleBackToMenu} />,
+                    title: 'Charla con el Maestro',
+                    onBack: handleBackToMenu,
+                    showHeader: true,
+                 };
             default:
-                return <MainMenu studentName={studentName} gameState={gameState} onSelectCategory={handleSelectCategory} onStartWeeklyExam={handleStartWeeklyExam} onStartRefreshExam={handleStartRefreshExam} onStartLiveConversation={handleStartLiveConversation} onStartFreePractice={handleStartFreePractice} connectionStatus={connectionStatus} />;
+                 return {
+                    component: <MainMenu studentProfile={studentProfile} gameState={gameState} onSelectCategory={handleSelectCategory} onStartWeeklyExam={handleStartWeeklyExam} onStartRefreshExam={handleStartRefreshExam} onStartLiveConversation={handleStartLiveConversation} onStartFreePractice={handleStartFreePractice} connectionStatus={connectionStatus} isAiEnabled={isAiEnabled}/>,
+                    showHeader: true,
+                };
         }
-    };
+    }, [screen, studentProfile, gameState, handleSelectCategory, handleStartWeeklyExam, handleStartRefreshExam, handleStartLiveConversation, handleStartFreePractice, connectionStatus, isAiEnabled, handleProfileSubmit, handleSelectCategoryForFreePractice, handleBackToMenu, selectedCategory, handleStartPractice, isFreeMode, handleBackToFreePracticeMenu, quizConfig, handleQuizEnd, handleBackToLevelSelection, finalScore]);
     
     return (
         <SpeechProvider>
             <div className="flex justify-center items-center min-h-screen p-4">
-                <div className="bg-white/90 backdrop-blur-sm p-4 sm:p-8 rounded-2xl shadow-2xl w-full max-w-4xl text-center text-slate-700 border border-white/20">
-                    {renderScreen()}
+                <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-2xl w-full max-w-4xl text-slate-700 border border-white/20 flex flex-col h-[95vh] max-h-[95vh]">
+                    {screenConfig.showHeader && (
+                        <GlobalHeader
+                            onBack={screenConfig.onBack}
+                            title={screenConfig.title}
+                            connectionStatus={connectionStatus}
+                            isAiEnabled={isAiEnabled}
+                            onToggleAi={handleToggleAi}
+                        />
+                    )}
+                    <main className="flex-grow overflow-y-auto p-4 sm:p-8">
+                        {screenConfig.component}
+                    </main>
                 </div>
             </div>
         </SpeechProvider>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 
 interface SpeechContextType {
     isMuted: boolean;
@@ -15,13 +15,22 @@ export const SpeechProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const [isMuted, setIsMuted] = useState<boolean>(() => {
         try {
             const savedMuteState = localStorage.getItem(SPEECH_MUTED_KEY);
-            return savedMuteState ? JSON.parse(savedMuteState) : true;
+            // Voice is now ON by default
+            return savedMuteState ? JSON.parse(savedMuteState) : false;
         } catch {
-            return true;
+            return false;
         }
     });
     const [isSupported, setIsSupported] = useState<boolean>(false);
     const [spanishVoice, setSpanishVoice] = useState<SpeechSynthesisVoice | null>(null);
+    
+    // Use a ref to track the latest muted state. This allows the `speak` callback
+    // to access the current `isMuted` value without needing to be re-created every
+    // time `isMuted` changes, making the function's identity stable.
+    const mutedRef = useRef(isMuted);
+    useEffect(() => {
+        mutedRef.current = isMuted;
+    }, [isMuted]);
 
     useEffect(() => {
         const checkSupport = 'speechSynthesis' in window;
@@ -53,7 +62,8 @@ export const SpeechProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }, []);
 
     const speak = useCallback((text: string) => {
-        if (isMuted || !isSupported) {
+        // Read the latest muted state from the ref to avoid dependency on the `isMuted` state.
+        if (mutedRef.current || !isSupported) {
             return;
         }
         window.speechSynthesis.cancel();
@@ -63,7 +73,7 @@ export const SpeechProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
         utterance.lang = 'es-ES';
         window.speechSynthesis.speak(utterance);
-    }, [isMuted, isSupported, spanishVoice]);
+    }, [isSupported, spanishVoice]);
 
     const value = { isMuted, toggleMute, speak, isSupported };
 

@@ -8,7 +8,6 @@ interface LevelSelectionProps {
     categoryId: CategoryId;
     gameState: GameState;
     onStartPractice: (categoryId: CategoryId, level: number) => void;
-    onBack: () => void;
     isFreeMode?: boolean;
 }
 
@@ -19,16 +18,12 @@ const levelDetails: Record<number, { name: string; color: string; bg: string; bo
     3: { name: 'Difícil', color: 'text-purple-800', bg: 'bg-purple-100', border: 'border-purple-500' }
 };
 
-export const LevelSelection: React.FC<LevelSelectionProps> = ({ categoryId, gameState, onStartPractice, onBack, isFreeMode = false }) => {
+export const LevelSelection: React.FC<LevelSelectionProps> = ({ categoryId, gameState, onStartPractice, isFreeMode = false }) => {
     const categoryData = gameState[categoryId];
     const levels = Object.keys(questions[categoryId]);
 
     return (
-        <div className="animate-fade-in relative">
-            <button onClick={onBack} className="absolute -top-2 left-0 sm:top-0 sm:left-0 text-slate-500 font-bold hover:text-slate-800 transition-colors">
-                &larr; Volver
-            </button>
-            <h2 className="text-4xl font-black text-slate-800 mb-2 mt-8 sm:mt-0">{categoryNames[categoryId]}</h2>
+        <div className="animate-fade-in text-center">
             <p className="text-slate-600 mb-6">
                 {isFreeMode
                     ? 'Elige cualquier nivel para practicar libremente.'

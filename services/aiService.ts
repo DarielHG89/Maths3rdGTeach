@@ -1,11 +1,15 @@
 import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
-import type { Question } from "../types";
+import type { Question, StudentProfile } from "../types";
 
 // Para una futura integración con una IA de Gemini auto-hospedada,
 // se modificaría la inicialización del cliente o se usaría un endpoint de fetch aquí.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-const systemInstructionQuiz = "Eres 'Maestro Digital', un tutor amigable y paciente para un niño de primaria (entre 6 y 10 años). Tus respuestas deben ser simples, alentadoras y fáciles de entender. Usa un lenguaje muy sencillo y positivo. No uses palabras complicadas. Habla siempre en español. Evita caracteres especiales o formato que pueda confundir a un lector de texto a voz.";
+const getSystemInstructionQuiz = (profile: StudentProfile) => {
+    const genderTerm = profile.gender === 'boy' ? 'un niño' : 'una niña';
+    return `Eres 'Maestro Digital', un tutor IA súper divertido, amigable y paciente para ${genderTerm} de ${profile.age} años. Tus respuestas deben ser simples, alentadoras y fáciles de entender. Usa un lenguaje muy sencillo, positivo y creativo, con analogías y ejemplos divertidos. Usa muchos emoticonos relevantes como ✨, 🚀, 🧠, 👍, 💡. Habla siempre en español. Evita caracteres especiales o formato que pueda confundir a un lector de texto a voz.`;
+};
+
 const systemInstructionLive = "Eres 'Maestro Digital', un tutor de IA amigable, paciente y divertido para un niño de primaria. Tu objetivo es tener una conversación educativa y atractiva. Responde a sus preguntas, explícale cosas de forma sencilla y mantén la conversación. Usa un lenguaje sencillo y positivo. Habla siempre en español.";
 
 let isApiAvailable = false;
@@ -27,49 +31,62 @@ export async function checkGeminiConnection(): Promise<boolean> {
     return isApiAvailable;
 }
 
-export async function generateExplanation(question: Question, incorrectAnswer: string): Promise<string> {
+export async function generateExplanation(question: Question, incorrectAnswer: string, profile: StudentProfile): Promise<string> {
     if (!isApiAvailable) {
-        return question.explanation || `La respuesta correcta es "${question.answer}". ¡Sigue practicando y lo conseguirás!`;
+        throw new Error("AI service is not available.");
     }
-    
-    const prompt = `La pregunta era: "${question.question}". El niño respondió "${incorrectAnswer}", pero la respuesta correcta es "${question.answer}". Explícale de forma muy sencilla y alentadora por qué la respuesta correcta es "${question.answer}". Dale un ejemplo si es útil. No empieces con "La respuesta correcta es..." sino explícaselo directamente.`;
-    
     try {
+        const prompt = `La pregunta era: "${question.question}". ${profile.gender === 'boy' ? 'El niño' : 'La niña'} respondió "${incorrectAnswer}", pero la respuesta correcta es "${question.answer}". ¡No pasa nada por equivocarse! Explícale de forma súper positiva, divertida y sencilla por qué la respuesta es "${question.answer}". Usa una analogía o un ejemplo genial para que lo entienda. Anímale a seguir intentándolo. Empieza con algo como "¡Casi! ¡Vamos a ver este pequeño truco! 🕵️‍♂️" o "¡Buena intentona! Así es como lo ven los detectives de las mates: 🧠".`;
+        
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
-                systemInstruction: systemInstructionQuiz,
+                systemInstruction: getSystemInstructionQuiz(profile),
                 temperature: 0.7,
             }
         });
-        return response.text;
+        
+        const explanation = response.text;
+        if (typeof explanation === 'string' && explanation.trim().length > 0) {
+            return explanation;
+        } else {
+            console.warn("Received empty or invalid explanation from AI.");
+            throw new Error("Received empty or invalid explanation from AI.");
+        }
+
     } catch (error) {
-        console.error("Error generating explanation:", error);
-        return question.explanation || "¡Inténtalo de nuevo! La práctica hace al maestro.";
+        console.error("Error generating AI explanation:", error);
+        throw error;
     }
 }
 
-export async function generateHint(question: Question): Promise<string> {
+export async function generateHint(question: Question, profile: StudentProfile): Promise<string> {
     if (!isApiAvailable) {
-        return question.hint || "Piensa con cuidado, ¡tú puedes!";
+        throw new Error("AI service is not available.");
     }
-
-    const prompt = `La pregunta es: "${question.question}". Dame una pista muy corta y sencilla para un niño. La pista no debe dar la respuesta, solo una pequeña ayuda para pensar.`;
-
     try {
+        const prompt = `La pregunta es: "${question.question}". Dame una pista muy creativa y divertida para un ${profile.gender === 'boy' ? 'niño' : 'niña'} de ${profile.age} años. Usa una analogía o una pequeña historia para explicar el concepto. Por ejemplo, si es una multiplicación, podrías hablar de galaxias de galletas 🌌🍪. ¡Hazlo memorable y nada aburrido! Es crucial que, bajo NINGUNA circunstancia, reveles la respuesta final ("${question.answer}") ni números que lleven directamente a ella.`;
+
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
-                systemInstruction: systemInstructionQuiz,
+                systemInstruction: getSystemInstructionQuiz(profile),
                 temperature: 0.8,
             }
         });
-        return response.text;
+
+        const hint = response.text;
+        if (typeof hint === 'string' && hint.trim().length > 0) {
+            return hint;
+        } else {
+            console.warn("Received empty or invalid hint from AI.");
+            throw new Error("Received empty or invalid hint from AI.");
+        }
     } catch (error) {
-        console.error("Error generating hint:", error);
-        return question.hint || "Piensa con cuidado, ¡tú puedes!";
+        console.error("Error generating AI hint:", error);
+        throw error;
     }
 }
 

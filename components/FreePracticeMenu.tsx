@@ -6,7 +6,6 @@ import { categoryNames } from '../utils/constants';
 
 interface FreePracticeMenuProps {
     onSelectCategory: (categoryId: CategoryId) => void;
-    onBack: () => void;
 }
 
 const categoryIcons: Record<CategoryId, string> = {
@@ -19,15 +18,11 @@ const categoryIcons: Record<CategoryId, string> = {
     reloj: '⏰'
 };
 
-export const FreePracticeMenu: React.FC<FreePracticeMenuProps> = ({ onSelectCategory, onBack }) => {
+export const FreePracticeMenu: React.FC<FreePracticeMenuProps> = ({ onSelectCategory }) => {
     const categories = Object.keys(questions) as CategoryId[];
 
     return (
-        <div className="animate-fade-in relative">
-            <button onClick={onBack} className="absolute -top-2 left-0 sm:top-0 sm:left-0 text-slate-500 font-bold hover:text-slate-800 transition-colors">
-                &larr; Volver al Panel
-            </button>
-            <h2 className="text-4xl font-black text-slate-800 mb-2 mt-8 sm:mt-0">Práctica Libre</h2>
+        <div className="animate-fade-in text-center">
             <p className="text-slate-600 mb-6">Elige una categoría para practicar sin límites. ¡Todos los niveles están desbloqueados!</p>
             
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">

@@ -1,13 +1,13 @@
-
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-// Fix: Removed LiveSession as it's no longer exported.
+// Fix: The 'LiveSession' type is not exported from '@google/genai'. It is now inferred from the `connectToLive` function's return type.
 import type { LiveServerMessage } from '@google/genai';
 import { connectToLive } from '../services/aiService';
 import { createBlob, decode, decodeAudioData } from '../utils/audio';
 import type { TranscriptEntry } from '../types';
 import { useSpeech } from '../context/SpeechContext';
 import { Card } from './common/Card';
+
+type LiveSession = Awaited<ReturnType<typeof connectToLive>>;
 
 interface LiveConversationProps {
     onBack: () => void;
@@ -45,8 +45,7 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
     const [viewingPast, setViewingPast] = useState(false);
     const [selectedTranscript, setSelectedTranscript] = useState<TranscriptEntry[] | null>(null);
 
-    // Fix: Using `any` for sessionRef as LiveSession type is no longer exported.
-    const sessionRef = useRef<any | null>(null);
+    const sessionRef = useRef<LiveSession | null>(null);
     const inputAudioContextRef = useRef<AudioContext | null>(null);
     const outputAudioContextRef = useRef<AudioContext | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -58,7 +57,7 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
     const isStoppingRef = useRef<boolean>(false);
     
     const transcriptRef = useRef<TranscriptEntry[]>([]);
-    const processMessageRef = useRef<(message: LiveServerMessage) => void>();
+    const processMessageRef = useRef<((message: LiveServerMessage) => void) | undefined>(undefined);
     
     useEffect(() => {
         transcriptRef.current = transcript;
@@ -112,8 +111,7 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
         
         setStatus('idle');
         
-        // Fix: The session.close() method was called without arguments, but it expects one. Passing an empty object to resolve the error.
-        sessionRef.current?.close({});
+        sessionRef.current?.close();
         sessionRef.current = null;
 
         mediaStreamRef.current?.getTracks().forEach(track => track.stop());
@@ -139,7 +137,6 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
 
 
     useEffect(() => {
-        // Fix: Refactored message processing to handle API changes (no more `isFinal` property).
         processMessageRef.current = async (message: LiveServerMessage) => {
             if (isStoppingRef.current) return;
 
@@ -211,8 +208,8 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
 
                 if(message.serverContent.turnComplete) {
                     turnCompleteReceivedRef.current = true;
-                    // Mark the last transcript entries as final.
-                    setTranscript(prev => prev.map((entry, index) => index === prev.length - 1 ? { ...entry, isFinal: true } : entry));
+                    // Fix: Mark all non-final transcript entries as final to correctly conclude the turn.
+                    setTranscript(prev => prev.map(entry => entry.isFinal ? entry : { ...entry, isFinal: true }));
                     if (audioSourcesRef.current.size === 0) {
                         setStatus('listening');
                         turnCompleteReceivedRef.current = false;
@@ -228,7 +225,6 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
         setTranscript([]);
         setStatus('listening');
         try {
-            // FIX: Cast window to `any` to allow access to the non-standard `webkitAudioContext` for broader browser compatibility, resolving TypeScript errors.
             inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
             outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
             
@@ -306,15 +302,15 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
 
     if (viewingPast) {
         return (
-            <div className="animate-fade-in relative flex flex-col h-[70vh] max-h-[70vh]">
+            <div className="animate-fade-in relative flex flex-col h-full">
                 {selectedTranscript ? (
                     // Viewing a single past transcript
                     <>
-                        <header className="flex-shrink-0">
-                             <button onClick={() => setSelectedTranscript(null)} className="absolute top-0 left-0 text-slate-500 font-bold hover:text-slate-800 transition-colors">
+                        <header className="flex-shrink-0 relative">
+                             <button onClick={() => setSelectedTranscript(null)} className="absolute -top-4 -left-4 text-slate-500 font-bold hover:text-slate-800 transition-colors">
                                 &larr; Volver al Historial
                             </button>
-                            <h2 className="text-3xl font-black text-slate-800 text-center mb-4 mt-8 sm:mt-0">Transcripción</h2>
+                            <h2 className="text-3xl font-black text-slate-800 text-center mb-4">Transcripción</h2>
                         </header>
                          <div className="flex-grow bg-slate-100 rounded-lg p-4 overflow-y-auto shadow-inner">
                             {selectedTranscript.map((entry, index) => (
@@ -330,11 +326,11 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
                 ) : (
                     // Viewing the list of past transcripts
                     <>
-                        <header className="flex-shrink-0">
-                            <button onClick={() => setViewingPast(false)} className="absolute top-0 left-0 text-slate-500 font-bold hover:text-slate-800 transition-colors">
+                        <header className="flex-shrink-0 relative">
+                            <button onClick={() => setViewingPast(false)} className="absolute -top-4 -left-4 text-slate-500 font-bold hover:text-slate-800 transition-colors">
                                 &larr; Volver a la Charla
                             </button>
-                            <h2 className="text-4xl font-black text-slate-800 mb-2 mt-8 sm:mt-0">Conversaciones Pasadas</h2>
+                            <h2 className="text-4xl font-black text-slate-800 mb-2">Conversaciones Pasadas</h2>
                              <p className="text-slate-500 mb-4">Revisa tus charlas anteriores con el Maestro.</p>
                         </header>
                          <div className="flex-grow overflow-y-auto space-y-3 p-1">
@@ -357,14 +353,10 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
 
 
     return (
-        <div className="animate-fade-in relative flex flex-col h-[70vh] max-h-[70vh]">
+        <div className="animate-fade-in relative flex flex-col h-full">
             <header className="flex-shrink-0 flex justify-between items-start">
                  <div>
-                    <button onClick={() => { stopConversation(true); onBack(); }} className="absolute top-0 left-0 text-slate-500 font-bold hover:text-slate-800 transition-colors">
-                        &larr; Volver al Panel
-                    </button>
-                    <h2 className="text-4xl font-black text-slate-800 mb-2 mt-8 sm:mt-0">Charla con el Maestro</h2>
-                    <p className="text-slate-500 mb-4">¡Habla con el Maestro Digital sobre lo que quieras aprender!</p>
+                    <p className="text-slate-500 mb-4 text-left">¡Habla con el Maestro Digital sobre lo que quieras aprender!</p>
                  </div>
                  {pastTranscripts.length > 0 && (
                      <button 
