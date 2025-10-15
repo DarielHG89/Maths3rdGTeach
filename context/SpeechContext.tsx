@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef, useMemo } from 'react';
 import type { VoiceMode } from '../types';
 import { generateSpeech } from '../services/aiService';
 import { decode, decodeAudioData } from '../utils/audio';
@@ -6,7 +6,7 @@ import { decode, decodeAudioData } from '../utils/audio';
 interface SpeechContextType {
     isMuted: boolean;
     toggleMute: () => void;
-    speak: (text: string) => Promise<void>;
+    speak: (text: string) => void;
     isSupported: boolean;
     isSpeaking: boolean;
 }
@@ -15,13 +15,9 @@ const SpeechContext = createContext<SpeechContextType | undefined>(undefined);
 
 const SPEECH_MUTED_KEY = 'maestroDigitalMuted';
 
-// Helper function to remove characters that can cause issues with TTS engines
 const sanitizeTextForSpeech = (text: string): string => {
-    // This regex removes a broad range of emojis and symbols, replacing them with a space
-    // to avoid merging words, then cleans up any extra whitespace.
     return text.replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, ' ').replace(/\s+/g, ' ').trim();
 };
-
 
 export const SpeechProvider: React.FC<{ children: ReactNode; voiceMode: VoiceMode }> = ({ children, voiceMode }) => {
     const [isMuted, setIsMuted] = useState<boolean>(() => {
@@ -38,11 +34,7 @@ export const SpeechProvider: React.FC<{ children: ReactNode; voiceMode: VoiceMod
     
     const audioContextRef = useRef<AudioContext | null>(null);
     const currentAudioSourceRef = useRef<AudioBufferSourceNode | null>(null);
-    const mutedRef = useRef(isMuted);
-
-    useEffect(() => {
-        mutedRef.current = isMuted;
-    }, [isMuted]);
+    const logicRef = useRef<any>();
 
     useEffect(() => {
         if (!audioContextRef.current) {
@@ -77,88 +69,108 @@ export const SpeechProvider: React.FC<{ children: ReactNode; voiceMode: VoiceMod
         localStorage.setItem(SPEECH_MUTED_KEY, JSON.stringify(isMuted));
         if (isMuted) {
             window.speechSynthesis.cancel();
-            currentAudioSourceRef.current?.stop();
+            // Fix: Pass 0 to stop() for compatibility with older browser versions.
+            currentAudioSourceRef.current?.stop(0);
             currentAudioSourceRef.current = null;
             setIsSpeaking(false);
         }
     }, [isMuted]);
+    
+    // Store all logic and state dependencies in a ref. This allows the `speak` function
+    // to access the latest state without needing to be re-created itself.
+    useEffect(() => {
+        logicRef.current = {
+            isMuted,
+            isSupported,
+            spanishVoice,
+            voiceMode,
+            setIsSpeaking,
+            audioContextRef,
+            currentAudioSourceRef,
+            async playOnline(text: string) {
+                if (!audioContextRef.current) {
+                    console.error("AudioContext not available.");
+                    setIsSpeaking(false);
+                    return;
+                }
+                try {
+                    const base64Audio = await generateSpeech(text);
+                    const audioData = decode(base64Audio);
+                    const audioBuffer = await decodeAudioData(audioData, audioContextRef.current, 24000, 1);
+                    
+                    const source = audioContextRef.current.createBufferSource();
+                    source.buffer = audioBuffer;
+                    source.connect(audioContextRef.current.destination);
+                    source.onended = () => {
+                        setIsSpeaking(false);
+                        currentAudioSourceRef.current = null;
+                    };
+                    source.start();
+                    currentAudioSourceRef.current = source;
+                } catch (error) {
+                    console.error("Online speech synthesis error:", error);
+                    setIsSpeaking(false);
+                }
+            }
+        };
+    }, [isMuted, isSupported, spanishVoice, voiceMode]);
 
-    const playOnline = useCallback(async (text: string) => {
-        if (!audioContextRef.current) {
-            console.error("AudioContext not available.");
-            setIsSpeaking(false);
-            return;
-        }
-        try {
-            const base64Audio = await generateSpeech(text);
-            const audioData = decode(base64Audio);
-            const audioBuffer = await decodeAudioData(audioData, audioContextRef.current, 24000, 1);
-            
-            const source = audioContextRef.current.createBufferSource();
-            source.buffer = audioBuffer;
-            source.connect(audioContextRef.current.destination);
-            source.onended = () => {
-                setIsSpeaking(false);
-                currentAudioSourceRef.current = null;
-            };
-            source.start();
-            currentAudioSourceRef.current = source;
-        } catch (error) {
-            console.error("Online speech synthesis error:", error);
-            setIsSpeaking(false);
-        }
-    }, []);
 
-    const speak = useCallback(async (text: string) => {
-        if (mutedRef.current || !isSupported) return;
+    // This stable `speak` function's identity never changes. It acts as a gateway
+    // to the real logic stored in the ref, preventing re-render loops in consumers.
+    const speak = useCallback((text: string) => {
+        const logic = logicRef.current;
+        if (!logic || logic.isMuted || !logic.isSupported) return;
 
         const sanitizedText = sanitizeTextForSpeech(text);
-        if (!sanitizedText) {
-            // If text is only emojis/symbols, do nothing.
-            return;
-        }
+        if (!sanitizedText) return;
 
         window.speechSynthesis.cancel();
-        currentAudioSourceRef.current?.stop();
-        setIsSpeaking(true);
+        // Fix: Pass 0 to stop() for compatibility with older browser versions.
+        logic.currentAudioSourceRef.current?.stop(0);
+        logic.setIsSpeaking(true);
 
-        const useLocal = voiceMode === 'local' || (voiceMode === 'auto' && !!spanishVoice);
+        const useLocal = logic.voiceMode === 'local' || (logic.voiceMode === 'auto' && !!logic.spanishVoice);
         
         if (useLocal) {
             const utterance = new SpeechSynthesisUtterance(sanitizedText);
-            if (spanishVoice) utterance.voice = spanishVoice;
+            if (logic.spanishVoice) utterance.voice = logic.spanishVoice;
             utterance.lang = 'es-ES';
-            utterance.onend = () => setIsSpeaking(false);
+            utterance.onend = () => logic.setIsSpeaking(false);
             utterance.onerror = (e) => {
-                // 'interrupted' and 'canceled' are not true errors. They happen when we
-                // intentionally stop speech (e.g., by calling speak() again). We should
-                // not treat them as failures that require a fallback.
                 if (e.error === 'interrupted' || e.error === 'canceled') {
-                    console.debug(`Local speech synthesis intentionally stopped: ${e.error}`);
+                    console.debug(`Local speech intentionally stopped: ${e.error}`);
                     return;
                 }
-
                 const errorDetail = typeof e.error === 'object' ? JSON.stringify(e.error) : e.error;
                 console.error(`Local speech synthesis error: ${errorDetail}`, { text: sanitizedText });
                 
-                if (voiceMode === 'auto') {
+                if (logic.voiceMode === 'auto') {
                     console.log("Local TTS failed, attempting fallback to online voice.");
-                    playOnline(sanitizedText);
+                    logic.playOnline(sanitizedText);
                 } else {
-                    setIsSpeaking(false);
+                    logic.setIsSpeaking(false);
                 }
             };
             window.speechSynthesis.speak(utterance);
         } else {
-            await playOnline(sanitizedText);
+            logic.playOnline(sanitizedText);
         }
-    }, [isSupported, spanishVoice, voiceMode, playOnline]);
+    }, []);
 
     const toggleMute = useCallback(() => {
         setIsMuted(prev => !prev);
     }, []);
 
-    const value = { isMuted, toggleMute, speak, isSupported, isSpeaking };
+    // Memoize the context value to prevent unnecessary re-renders in consumer components.
+    // `speak` and `toggleMute` are stable, so this object only changes when the boolean states change.
+    const value = useMemo(() => ({ 
+        isMuted, 
+        toggleMute, 
+        speak, 
+        isSupported, 
+        isSpeaking 
+    }), [isMuted, toggleMute, speak, isSupported, isSpeaking]);
 
     return <SpeechContext.Provider value={value}>{children}</SpeechContext.Provider>;
 };

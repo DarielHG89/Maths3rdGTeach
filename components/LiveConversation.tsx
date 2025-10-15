@@ -130,7 +130,8 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
         }
         outputAudioContextRef.current = null;
         
-        audioSourcesRef.current.forEach(source => source.stop());
+        // Fix: Pass 0 to stop() for compatibility with older browser versions.
+        audioSourcesRef.current.forEach(source => source.stop(0));
         audioSourcesRef.current.clear();
         nextStartTimeRef.current = 0;
     }, []);
@@ -192,7 +193,8 @@ export const LiveConversation: React.FC<LiveConversationProps> = ({ onBack }) =>
                 }
     
                 if (message.serverContent?.interrupted) {
-                    audioSourcesRef.current.forEach(source => source.stop());
+                    // Fix: Pass 0 to stop() for compatibility with older browser versions.
+                    audioSourcesRef.current.forEach(source => source.stop(0));
                     audioSourcesRef.current.clear();
                     nextStartTimeRef.current = 0;
                     turnCompleteReceivedRef.current = false;

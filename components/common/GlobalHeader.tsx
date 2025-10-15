@@ -34,9 +34,11 @@ const AiToggleSwitch: React.FC<{ isEnabled: boolean, onToggle: () => void, isOnl
             <span className="text-xs font-bold text-slate-600">IA</span>
             <button
                 onClick={onToggle}
-                disabled={!isOnline}
-                className={`relative inline-flex items-center h-5 rounded-full w-9 transition-colors duration-300 focus:outline-none ${isEnabled ? 'bg-green-500' : 'bg-slate-300'} ${!isOnline ? 'cursor-not-allowed opacity-50' : ''}`}
-                title={isOnline ? (isEnabled ? 'Desactivar IA' : 'Activar IA') : 'La conexión con la IA no está disponible'}
+                className={`relative inline-flex items-center h-5 rounded-full w-9 transition-colors duration-300 focus:outline-none ${isEnabled ? 'bg-green-500' : 'bg-slate-300'}`}
+                title={isOnline 
+                    ? (isEnabled ? 'Desactivar IA' : 'Activar IA') 
+                    : (isEnabled ? 'Desactivar IA (sin conexión)' : 'Activar IA (sin conexión)')
+                }
             >
                 <span
                     className={`inline-block w-3.5 h-3.5 transform bg-white rounded-full transition-transform duration-300 ${isEnabled ? 'translate-x-5' : 'translate-x-1'}`}
@@ -111,6 +113,28 @@ const VoiceControl: React.FC<{ voiceMode: VoiceMode, onVoiceModeChange: (mode: V
 };
 
 export const GlobalHeader: React.FC<GlobalHeaderProps> = ({ onBack, title, connectionStatus, isAiEnabled, onToggleAi, voiceMode, onVoiceModeChange }) => {
+    const [isSettingsVisible, setIsSettingsVisible] = useState(false);
+    const settingsTimerRef = useRef<number | null>(null);
+
+    const showSettings = () => {
+        if (settingsTimerRef.current) {
+            clearTimeout(settingsTimerRef.current);
+        }
+        setIsSettingsVisible(true);
+        settingsTimerRef.current = window.setTimeout(() => {
+            setIsSettingsVisible(false);
+        }, 5000);
+    };
+
+    useEffect(() => {
+        // Cleanup timer on component unmount
+        return () => {
+            if (settingsTimerRef.current) {
+                clearTimeout(settingsTimerRef.current);
+            }
+        };
+    }, []);
+    
     return (
         <header className="relative w-full p-3 flex justify-between items-center border-b-2 border-slate-200 flex-shrink-0">
             <div className="w-1/4 flex justify-start">
@@ -123,10 +147,27 @@ export const GlobalHeader: React.FC<GlobalHeaderProps> = ({ onBack, title, conne
             <div className="w-2/4 text-center">
                 {title && <h2 className="text-xl font-black text-slate-700 truncate">{title}</h2>}
             </div>
-            <div className="w-1/4 flex justify-end items-center gap-2">
-                 <AiToggleSwitch isEnabled={isAiEnabled} onToggle={onToggleAi} isOnline={connectionStatus === 'online'} />
-                 <ConnectionIndicator status={connectionStatus} />
-                 <VoiceControl voiceMode={voiceMode} onVoiceModeChange={onVoiceModeChange} isOnline={connectionStatus === 'online'} />
+            <div className="w-1/4 flex justify-end items-center">
+                <div className="flex items-center gap-2">
+                    <div 
+                        className={`flex items-center gap-2 transition-opacity duration-300 ${isSettingsVisible ? 'opacity-100' : 'opacity-0'}`}
+                    >
+                        {isSettingsVisible && (
+                            <>
+                                <AiToggleSwitch isEnabled={isAiEnabled} onToggle={onToggleAi} isOnline={connectionStatus === 'online'} />
+                                <ConnectionIndicator status={connectionStatus} />
+                                <VoiceControl voiceMode={voiceMode} onVoiceModeChange={onVoiceModeChange} isOnline={connectionStatus === 'online'} />
+                            </>
+                        )}
+                    </div>
+                    <button
+                        onClick={showSettings}
+                        className="p-1 rounded-full hover:bg-slate-200 transition-colors"
+                        title="Configuración"
+                    >
+                        <span className="text-2xl" role="img" aria-label="Configuración">⚙️</span>
+                    </button>
+                </div>
             </div>
         </header>
     );
